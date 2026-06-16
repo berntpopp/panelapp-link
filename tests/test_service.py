@@ -205,3 +205,87 @@ def test_diagnostics(service: PanelAppService) -> None:
     diag = service.diagnostics()
     assert diag["schema_version"]
     assert "panel_versions" in diag
+
+
+# --- cursor decoding edge cases --------------------------------------------
+
+
+def test_search_panels_malformed_cursor_raises(service: PanelAppService) -> None:
+    with pytest.raises(InvalidInputError) as exc:
+        service.search_panels(cursor="!!!not-base64!!!")
+    assert exc.value.field == "cursor"
+
+
+def test_get_panel_genes_malformed_cursor_raises(service: PanelAppService) -> None:
+    with pytest.raises(InvalidInputError) as exc:
+        service.get_panel_genes(panel_id=285, region="uk", cursor="@@bogus@@")
+    assert exc.value.field == "cursor"
+
+
+def test_cursor_negative_offset_rejected() -> None:
+    # A well-formed token whose decoded offset is negative is rejected.
+    from panelapp_link.services.panelapp_service import _decode_cursor, _encode_cursor
+
+    bad = _encode_cursor(-5)
+    with pytest.raises(InvalidInputError) as exc:
+        _decode_cursor(bad)
+    assert exc.value.field == "cursor"
+
+
+def test_cursor_roundtrip_unpadded() -> None:
+    from panelapp_link.services.panelapp_service import _decode_cursor, _encode_cursor
+
+    for offset in (0, 1, 7, 123, 4096):
+        assert _decode_cursor(_encode_cursor(offset)) == offset
+
+
+# --- additional validation branches ----------------------------------------
+
+
+def test_get_panel_genes_both_region_rejected(service: PanelAppService) -> None:
+    with pytest.raises(InvalidInputError) as exc:
+        service.get_panel_genes(panel_id=285, region="both")
+    assert exc.value.field == "region"
+
+
+def test_get_gene_panels_invalid_min_confidence(service: PanelAppService) -> None:
+    with pytest.raises(InvalidInputError) as exc:
+        service.get_gene_panels(gene_symbol="ATF6", min_confidence="purple")
+    assert exc.value.field == "min_confidence"
+
+
+def test_clamp_limit_rejects_below_one(service: PanelAppService) -> None:
+    with pytest.raises(InvalidInputError) as exc:
+        service.search_panels(query="", region="uk", limit=0)
+    assert exc.value.field == "limit"
+
+
+def test_offset_rejects_negative(service: PanelAppService) -> None:
+    with pytest.raises(InvalidInputError) as exc:
+        service.search_panels(query="", region="uk", offset=-1)
+    assert exc.value.field == "offset"
+
+
+def test_limit_clamped_to_max(service: PanelAppService) -> None:
+    # An over-large limit is silently clamped to the hard cap, not rejected.
+    from panelapp_link.services.panelapp_service import _MAX_LIMIT
+
+    assert PanelAppService._clamp_limit(_MAX_LIMIT + 9999) == _MAX_LIMIT
+
+
+# --- resolve_gene via hgnc id / query routing ------------------------------
+
+
+def test_resolve_gene_hgnc_prefix_routes_to_hgnc_id(service: PanelAppService) -> None:
+    # Confirm the gene exists first, then resolve via its HGNC CURIE.
+    by_symbol = service.resolve_gene(gene_symbol="ATF6")
+    hgnc = by_symbol["gene"].get("hgnc_id")
+    if not hgnc:
+        pytest.skip("fixture gene has no hgnc_id to exercise the HGNC routing path")
+    out = service.resolve_gene(query=hgnc)
+    assert out["gene"]["gene_symbol"] == "ATF6"
+
+
+def test_resolve_gene_blank_query_raises(service: PanelAppService) -> None:
+    with pytest.raises(InvalidInputError):
+        service.resolve_gene(query="   ")
