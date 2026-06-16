@@ -41,7 +41,10 @@ docs/
 scripts/
 tests/
 
-docker/
+# Exclude docker/ build + compose files from the context, but KEEP
+# entrypoint.sh — the Dockerfile copies it into the image.
+docker/*
+!docker/entrypoint.sh
 Dockerfile*
 docker-compose*.yml
 
