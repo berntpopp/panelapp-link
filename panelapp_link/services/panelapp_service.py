@@ -413,7 +413,7 @@ class PanelAppService:
         PanelApp is queried by ``entity_name`` (gene symbol). A bare ``hgnc_id``
         cannot drive the query, so ``gene_symbol`` is required; ``hgnc_id`` (when
         supplied alongside) filters the hits. Returns ``{"gene","count","panels"}``
-        where ``panels`` are shaped ``GenePanelHit`` rows ordered by confidence
+        where ``panels`` are shaped gene->panel hit rows ordered by confidence
         rank (desc) then region. Raises ``NotFoundError`` when the gene is absent.
         """
         self._validate_mode(response_mode)

@@ -89,10 +89,6 @@ class TestRecoveryCommands:
         out = nc.recovery_commands("search_panels", "invalid_input", {}, None)
         assert out == [{"tool": "get_server_capabilities", "arguments": {}}]
 
-    def test_data_unavailable_points_to_diagnostics(self) -> None:
-        out = nc.recovery_commands("search_panels", "data_unavailable", {}, None)
-        assert out == [{"tool": "get_panelapp_diagnostics", "arguments": {}}]
-
     def test_ambiguous_query_resolve_gene(self) -> None:
         out = nc.recovery_commands("resolve_gene", "ambiguous_query", {"query": "AMBIG"}, None)
         assert out == [{"tool": "search_panels", "arguments": {"query": "AMBIG"}}]
@@ -107,7 +103,6 @@ class TestRecoveryCommands:
             ("resolve_gene", "not_found", {"query": "x"}, None),
             ("get_gene_panels", "not_found", {"hgnc_id": "HGNC:1"}, None),
             ("search_panels", "invalid_input", {}, "query"),
-            ("search_panels", "data_unavailable", {}, None),
         ],
     )
     def test_all_capped_at_five(

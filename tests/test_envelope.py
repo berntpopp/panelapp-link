@@ -8,7 +8,6 @@ import pytest
 
 from panelapp_link.exceptions import (
     AmbiguousQueryError,
-    DataUnavailableError,
     DownloadError,
     InvalidInputError,
     NotFoundError,
@@ -73,7 +72,6 @@ class TestErrorClassification:
         [
             (NotFoundError("nope"), "not_found", False, "switch_tool"),
             (AmbiguousQueryError("amb"), "ambiguous_query", False, "switch_tool"),
-            (DataUnavailableError("no db"), "data_unavailable", False, "build_database"),
             (RateLimitError("limit"), "rate_limited", True, "retry_backoff"),
             (DownloadError("net"), "upstream_unavailable", True, "retry_backoff"),
             (RuntimeError("boom"), "internal_error", False, "retry_backoff"),
@@ -86,10 +84,6 @@ class TestErrorClassification:
         assert out["retryable"] is retryable
         assert out["recovery_action"] == recovery
         assert out["_meta"]["tool"] == "t"
-
-    async def test_data_unavailable_message(self) -> None:
-        out = await run_mcp_tool("t", _raiser(DataUnavailableError("x")))
-        assert out["message"] == "PanelApp database not built. Run `panelapp-link-data build`."
 
     async def test_invalid_input_with_field_errors(self) -> None:
         out = await run_mcp_tool("t", _raiser(InvalidInputError("bad", field="query")))

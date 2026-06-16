@@ -25,7 +25,6 @@ from panelapp_link.constants import (
 )
 from panelapp_link.exceptions import (
     AmbiguousQueryError,
-    DataUnavailableError,
     DownloadError,
     InvalidInputError,
     NotFoundError,
@@ -103,12 +102,6 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
         return "rate_limited", "PanelApp API rate limit hit. Try again later.", True
     if isinstance(exc, DownloadError):
         return "upstream_unavailable", "Could not reach the PanelApp API. Try again later.", True
-    if isinstance(exc, DataUnavailableError):
-        return (
-            "data_unavailable",
-            "PanelApp database not built. Run `panelapp-link-data build`.",
-            False,
-        )
     if isinstance(exc, NotFoundError):
         return "not_found", str(exc), False
     if isinstance(exc, AmbiguousQueryError):
@@ -126,8 +119,6 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
 def _recovery_action(error_code: str) -> str:
     if error_code in {"rate_limited", "upstream_unavailable"}:
         return "retry_backoff"
-    if error_code == "data_unavailable":
-        return "build_database"
     if error_code == "invalid_input":
         return "reformulate_input"
     if error_code in {"not_found", "ambiguous_query"}:

@@ -84,7 +84,7 @@ class PanelAppRestClient:
                     )
                 if status == 429:
                     last_exc = RateLimitError(
-                        f"PanelApp rate-limited the crawl (HTTP 429) for {url}.", status_code=429
+                        f"PanelApp rate-limited the request (HTTP 429) for {url}.", status_code=429
                     )
                     last_status = 429
                     retry_after = _parse_retry_after(response.headers.get("Retry-After"))

@@ -25,8 +25,9 @@ RESEARCH_USE_NOTICE = (
 
 PANELAPP_SERVER_INSTRUCTIONS = (
     "PanelApp-Link grounds gene-panel questions in PanelApp data from Genomics "
-    "England (UK) and PanelApp Australia. It mirrors both regions into local "
-    "SQLite and answers panel and gene questions read-only. Canonical workflow: "
+    "England (UK) and PanelApp Australia. It queries the PanelApp REST APIs for "
+    "both regions live and read-only (no local database), with an in-memory "
+    "cache. Canonical workflow: "
     "search_panels to find panels by name/disorder -> get_panel for a panel's "
     "detail and entity-count breakdown -> get_panel_genes for the entities "
     "(genes, regions/CNVs, STRs) with traffic-light confidence and mode of "
@@ -55,7 +56,7 @@ PANELAPP_USAGE_NOTES = (
     "phenotypes, penetrance, signed-off detail, evidence, publications, and raw "
     "extras. Paged tools (search_panels, get_panel_genes, get_gene_panels) page "
     "via an opaque truncated.next_cursor surfaced as _meta.next_commands[0]; "
-    "follow it for refresh-safe paging. Follow _meta.next_commands to advance "
+    "follow it to page through results. Follow _meta.next_commands to advance "
     "without guessing the next tool. Paste recommended citations verbatim."
 )
 
@@ -71,13 +72,13 @@ PANELAPP_REFERENCE_NOTES = (
     "both (queries and merges across regions; get_panel requires a single "
     "concrete region). Panels record their latest version plus a signed_off "
     "version and signed_off_date when a release has been signed off. "
-    "Error codes: invalid_input, not_found, ambiguous_query, data_unavailable, "
+    "Error codes: invalid_input, not_found, ambiguous_query, "
     "upstream_unavailable, rate_limited, internal_error. Errors carry retryable "
     "+ recovery_action; invalid_input adds field_errors (a list of "
     "{field, reason}). Paging contract: search_panels, get_panel_genes, and "
     "get_gene_panels return a truncated block with next_cursor; pass it back as "
-    "`cursor` to fetch the next page. A cursor is bound to the data build and is "
-    "rejected as invalid_input if the database was refreshed since it was minted."
+    "`cursor` to fetch the next page. A cursor is rejected as invalid_input only "
+    "if malformed."
 )
 
 PANELAPP_LICENSE_NOTE = (

@@ -6,7 +6,6 @@ from panelapp_link.constants import (
     CONFIDENCE_RANK,
     CONFIDENCE_TO_LABEL,
     REGION_LABELS,
-    SCHEMA_VERSION,
     confidence_label,
     confidence_rank_for_label,
 )
@@ -54,8 +53,7 @@ def test_confidence_maps_are_consistent() -> None:
         assert label in CONFIDENCE_RANK
 
 
-def test_region_labels_and_schema_version() -> None:
-    """Region labels and schema version are present."""
+def test_region_labels() -> None:
+    """Region labels are present."""
     assert REGION_LABELS["uk"] == "Genomics England PanelApp"
     assert REGION_LABELS["australia"] == "PanelApp Australia"
-    assert SCHEMA_VERSION == "1"

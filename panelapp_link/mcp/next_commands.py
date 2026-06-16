@@ -83,6 +83,4 @@ def recovery_commands(
         nexts = [cmd("search_panels", query=gene_in)] if gene_in else []
     elif error_code == "invalid_input":
         nexts = [cmd("get_server_capabilities")]
-    elif error_code == "data_unavailable":
-        nexts = [cmd("get_panelapp_diagnostics")]
     return nexts[:_MAX_NEXT_COMMANDS]

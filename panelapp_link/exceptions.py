@@ -40,10 +40,6 @@ class AmbiguousQueryError(PanelAppError):
         self.candidates = candidates or []
 
 
-class DataUnavailableError(PanelAppError):
-    """Raised when the local PanelApp database is missing or not yet built."""
-
-
 class DownloadError(PanelAppError):
     """Raised when PanelApp data cannot be fetched from the upstream API."""
 

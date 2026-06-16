@@ -1,14 +1,11 @@
 """Domain constants for PanelApp-Link.
 
 Confidence maps, ranks, region labels, and citation strings live here so the
-ingest builder, repository, services, and MCP discovery surface all derive
-confidence labels/ranks from a single source of truth.
+live PanelApp service and the MCP surface all derive confidence labels/ranks
+from a single source of truth.
 """
 
 from __future__ import annotations
-
-# SQLite schema version (matches data/schema.sql). String for `meta` storage.
-SCHEMA_VERSION = "1"
 
 # PanelApp confidence_level (int or str, always cast to str) -> traffic-light
 # label. GE uses 0-4; 3 and 4 are "green" (diagnostic-grade), 2 is "amber"
@@ -51,8 +48,8 @@ CITATION_SHORT = "PanelApp (Genomics England & Australia)"
 # Licensing / safety note advertised via the license resource.
 DATA_LICENSE = (
     "PanelApp content is provided by Genomics England and PanelApp Australia "
-    "under their respective terms of use. This server mirrors that content for "
-    "research use only; it is not clinical decision support."
+    "under their respective terms of use. This server provides read-only access "
+    "to that content for research use only; it is not clinical decision support."
 )
 
 

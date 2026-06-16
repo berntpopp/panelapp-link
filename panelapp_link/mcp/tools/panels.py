@@ -49,7 +49,7 @@ def register_panel_tools(mcp: FastMCP) -> None:
             "ranked panel summaries (id, name, version, region, disease group, "
             "entity counts, signed-off status). region='both' (default) merges both "
             "sources, deduped by (region, panel_id). Use to find a panel id before "
-            "get_panel / get_panel_genes. Page large result sets via the build-bound "
+            "get_panel / get_panel_genes. Page large result sets via the "
             "truncated.next_cursor (surfaced as _meta.next_commands[0])."
         ),
     )
@@ -74,7 +74,7 @@ def register_panel_tools(mcp: FastMCP) -> None:
             trunc = payload.get("truncated") or {}
             if trunc.get("next_cursor"):
                 # Page-forward first so an agent sweeping next_commands[0] walks
-                # the full result set (build-safe cursor).
+                # the full result set.
                 nexts.append(cmd("search_panels", region=region, cursor=trunc["next_cursor"]))
             nexts.extend(after_search_panels(payload.get("panels", [])))
             payload["_meta"] = {"next_commands": nexts[:5]}
@@ -133,7 +133,7 @@ def register_panel_tools(mcp: FastMCP) -> None:
             "'australia'). min_confidence is a traffic-light floor: green = green "
             "only, amber = amber+green, red = all. Widen response_mode for "
             "phenotypes/penetrance (standard) or evidence/publications (full). Page "
-            "via the build-bound truncated.next_cursor (surfaced as "
+            "via the truncated.next_cursor (surfaced as "
             "_meta.next_commands[0])."
         ),
     )

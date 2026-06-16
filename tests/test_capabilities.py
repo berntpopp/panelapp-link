@@ -56,13 +56,13 @@ class TestBuildCapabilities:
             "invalid_input",
             "not_found",
             "ambiguous_query",
-            "data_unavailable",
             "upstream_unavailable",
             "rate_limited",
             "internal_error",
         ):
             assert code in codes
-        assert codes["data_unavailable"]["operational_only"] is True
+        assert "data_unavailable" not in codes
+        assert "data_unavailable" not in caps["error_codes_list"]
         assert codes["upstream_unavailable"]["operational_only"] is True
         assert codes["rate_limited"]["operational_only"] is True
         assert codes["invalid_input"]["operational_only"] is False

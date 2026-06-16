@@ -97,8 +97,9 @@ def _static_surface() -> dict[str, Any]:
             "min_confidence": "green | amber | red; filters entities by rank "
             "(green = green only; amber = amber+green; red = all)",
             "response_mode": "minimal | compact | standard | full (default compact)",
-            "cursor": "opaque, build-bound page token from a prior truncated.next_cursor; "
-            "rejected (invalid_input, field=cursor) if the database was refreshed since.",
+            "cursor": "opaque offset-based page token from a prior truncated.next_cursor; "
+            "pass it to continue paging. Rejected (invalid_input, field=cursor) only if "
+            "malformed.",
         },
         "error_codes": [
             {
@@ -117,19 +118,14 @@ def _static_surface() -> dict[str, Any]:
                 "when": "resolve_gene free text matches multiple genes",
             },
             {
-                "code": "data_unavailable",
-                "operational_only": True,
-                "when": "database not built (ingest/ops); not reachable from a well-formed query",
-            },
-            {
                 "code": "upstream_unavailable",
                 "operational_only": True,
-                "when": "PanelApp API download failed (ingest/ops)",
+                "when": "a PanelApp API request failed (network or 5xx)",
             },
             {
                 "code": "rate_limited",
                 "operational_only": True,
-                "when": "PanelApp API rate-limited the crawl (ingest/ops)",
+                "when": "PanelApp rate-limited the request (HTTP 429)",
             },
             {
                 "code": "internal_error",
@@ -141,7 +137,6 @@ def _static_surface() -> dict[str, Any]:
             "invalid_input",
             "not_found",
             "ambiguous_query",
-            "data_unavailable",
             "upstream_unavailable",
             "rate_limited",
             "internal_error",

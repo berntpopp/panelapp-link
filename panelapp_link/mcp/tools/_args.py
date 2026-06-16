@@ -15,7 +15,7 @@ from panelapp_link.constants import CONFIDENCE_RANK
 from panelapp_link.exceptions import InvalidInputError
 from panelapp_link.models.enums import ENTITY_TYPES
 
-# region argument -> repository region keys (mirrors the service mapping).
+# region argument -> service region keys.
 _REGION_MAP: dict[str, list[str]] = {
     "both": ["uk", "australia"],
     "uk": ["uk"],

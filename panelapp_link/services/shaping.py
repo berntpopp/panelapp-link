@@ -265,7 +265,7 @@ def shape_entity(row: dict[str, Any], mode: ResponseMode) -> dict[str, Any]:
 
 
 def shape_gene_panel_hit(row: dict[str, Any]) -> dict[str, Any]:
-    """Shape one panel a gene appears on (a ``GenePanelHit`` row).
+    """Shape one panel a gene appears on (a gene->panel hit row).
 
     The internal ``confidence_rank`` ordering column is dropped; callers sort by
     it before shaping.
@@ -282,7 +282,7 @@ def shape_gene_panel_hit(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def shape_gene(row: dict[str, Any]) -> dict[str, Any]:
-    """Shape a rolled-up gene row (a ``GeneSummary``) for output.
+    """Shape a rolled-up gene summary row for output.
 
     Drops internal columns (``gene_symbol_upper``, ``max_confidence_rank``).
     """
