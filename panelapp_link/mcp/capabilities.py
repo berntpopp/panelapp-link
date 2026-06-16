@@ -190,33 +190,19 @@ def build_capabilities() -> dict[str, Any]:
 
 
 def _data_status() -> dict[str, Any]:
-    """Best-effort data provenance; never raises (capabilities must always work).
+    """Return the live backend status block (mode, sources, cache TTL).
 
-    Uses a defensive lazy import + broad except so capabilities import and tests
-    work even when ``data/repository.py`` (built in parallel) or the SQLite DB is
-    absent or unreadable.
+    The service is pure live-API with no local database, so this reports the
+    upstream PanelApp source URLs and the in-memory cache TTL. It never raises.
     """
-    try:
-        from panelapp_link.config import get_data_config
-        from panelapp_link.data.repository import PanelAppRepository
+    from panelapp_link.config import get_data_config
 
-        repo = PanelAppRepository(get_data_config().db_path)
-        meta = repo.get_meta()
-        status: dict[str, Any] = {"status": "ready"}
-        meta_dict = dict(meta)
-        for key in (
-            "schema_version",
-            "uk_panel_count",
-            "au_panel_count",
-            "entity_count",
-            "gene_count",
-            "build_utc",
-        ):
-            if key in meta_dict:
-                status[key] = meta_dict[key]
-        return status
-    except Exception:  # ImportError, missing DB, unreadable -- all degrade to unavailable
-        return {"status": "data_unavailable"}
+    cfg = get_data_config()
+    return {
+        "mode": "live",
+        "sources": {"uk": cfg.uk_api_url, "australia": cfg.au_api_url},
+        "cache_ttl_seconds": cfg.cache_ttl,
+    }
 
 
 def register_capability_resources(mcp: FastMCP) -> None:

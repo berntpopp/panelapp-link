@@ -21,46 +21,29 @@ if TYPE_CHECKING:
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Application lifespan: best-effort bootstrap, then the refresh scheduler.
+    """Application lifespan: no bootstrap, no scheduler (pure live backend).
 
-    The startup build is non-fatal: if the database cannot be built (e.g. no
-    network in CI, or an external scheduler owns it and has not run yet), the
-    server still starts and tools report ``data_unavailable`` until data lands.
-    The in-process scheduler keeps the database fresh and hot-reloads it on
-    change. App *construction* never touches the network or the database — that
-    only happens here, when uvicorn actually serves the app.
+    The service is a live PanelApp API client with an in-memory cache, so startup
+    touches neither the network nor any database. On shutdown the shared REST
+    client is closed via :func:`reset_panelapp_service`.
     """
-    from panelapp_link.config import get_data_config
-    from panelapp_link.ingest.builder import refresh as build_refresh
     from panelapp_link.logging_config import configure_logging
-    from panelapp_link.services.refresh import build_scheduler
+    from panelapp_link.mcp.service_adapters import reset_panelapp_service
 
     logger = configure_logging()
     logger.info("panelapp-link starting", host=settings.host, port=settings.port)
-
-    cfg = get_data_config()
-    if cfg.auto_bootstrap and not cfg.db_path.exists():
-        try:
-            await build_refresh(cfg, force=False)
-        except Exception as exc:  # non-fatal: serve, report data_unavailable until ready
-            logger.warning("database not ready at startup", error=str(exc))
-
-    scheduler = build_scheduler(cfg, logger)
-    if scheduler is not None:
-        await scheduler.start()
     try:
         yield
     finally:
-        if scheduler is not None:
-            await scheduler.stop()
+        reset_panelapp_service()
         logger.info("panelapp-link shutting down")
 
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application (health + discovery surface).
 
-    Safe to call with no database present and without any network access; the
-    lifespan (bootstrap + scheduler) only runs when the app is actually served.
+    Safe to call without any network access: the live backend makes requests only
+    when a tool is invoked, never at construction or startup.
     """
     app = FastAPI(
         title="PanelApp-Link",
@@ -83,7 +66,7 @@ def create_app() -> FastAPI:
     @app.get("/health")
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
-        """Liveness probe. Reports data status without forcing a build."""
+        """Liveness probe. Reports the live backend status (no network call)."""
         from panelapp_link.mcp.capabilities import _data_status
 
         return {"status": "ok", "version": __version__, "data": _data_status()}

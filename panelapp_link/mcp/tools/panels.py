@@ -62,7 +62,7 @@ def register_panel_tools(mcp: FastMCP) -> None:
         cursor: str | None = None,
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
-            payload = get_panelapp_service().search_panels(
+            payload = await get_panelapp_service().search_panels(
                 query,
                 region=region,
                 response_mode=response_mode,
@@ -106,7 +106,7 @@ def register_panel_tools(mcp: FastMCP) -> None:
         response_mode: _MODE = "compact",
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
-            payload = get_panelapp_service().get_panel(
+            payload = await get_panelapp_service().get_panel(
                 panel_id, region, response_mode=response_mode
             )
             payload["_meta"] = {"next_commands": after_get_panel(region, panel_id)}
@@ -154,7 +154,7 @@ def register_panel_tools(mcp: FastMCP) -> None:
         cursor: str | None = None,
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
-            payload = get_panelapp_service().get_panel_genes(
+            payload = await get_panelapp_service().get_panel_genes(
                 panel_id,
                 region,
                 entity_type=entity_type,

@@ -56,7 +56,7 @@ def register_gene_tools(mcp: FastMCP) -> None:
         response_mode: _MODE = "compact",
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
-            payload = get_panelapp_service().get_gene_panels(
+            payload = await get_panelapp_service().get_gene_panels(
                 gene_symbol=gene_symbol,
                 hgnc_id=hgnc_id,
                 region=region,
@@ -97,7 +97,7 @@ def register_gene_tools(mcp: FastMCP) -> None:
         response_mode: _MODE = "compact",
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
-            payload = get_panelapp_service().resolve_gene(
+            payload = await get_panelapp_service().resolve_gene(
                 query=query,
                 gene_symbol=gene_symbol,
                 hgnc_id=hgnc_id,

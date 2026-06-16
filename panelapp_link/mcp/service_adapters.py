@@ -1,78 +1,54 @@
 """Service binding for MCP tools.
 
-Single place where the repository + service are constructed for tool use. Tools
-call :func:`get_panelapp_service`. The cached service **hot-reloads** when the
-database file on disk changes (e.g. after a scheduled refresh or an external cron
-rebuild atomically swaps the file): a cheap ``stat`` per call detects the new
-file and reopens the read-only connection.
+Single place where the live :class:`PanelAppService` is constructed for tool use.
+Tools call :func:`get_panelapp_service`. The service is a process-wide singleton
+built over one shared :class:`PanelAppRestClient` (an async httpx client), created
+lazily on first use. There is no database and no hot-reload: the service is pure
+live-API with an in-memory TTL cache.
 
-On a missing/unbuilt database the underlying :class:`PanelAppRepository`
-constructor raises :class:`~panelapp_link.exceptions.DataUnavailableError`; that
-propagates out of ``get_panelapp_service`` so the calling tool's ``run_mcp_tool``
-boundary converts it into a ``data_unavailable`` envelope. Tests inject a service
-via :func:`set_service_for_testing`.
+Tests inject a service via :func:`set_service_for_testing`;
+:func:`reset_panelapp_service` drops the singleton and closes the owned client.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
+import asyncio
+from typing import TYPE_CHECKING
 
 from panelapp_link.config import get_data_config
 from panelapp_link.services.panelapp_service import PanelAppService
 
+if TYPE_CHECKING:
+    from panelapp_link.api.client import PanelAppRestClient
+
 _OVERRIDE: PanelAppService | None = None
 _CACHED: PanelAppService | None = None
-_CACHED_MTIME: float | None = None
-_REPO: object | None = None  # PanelAppRepository; typed loosely to avoid import cycle
-
-
-def _db_mtime(path: Path) -> float | None:
-    """Return the database file's mtime, or ``None`` when it does not exist."""
-    try:
-        return path.stat().st_mtime_ns / 1_000_000_000
-    except FileNotFoundError:
-        return None
+_CLIENT: PanelAppRestClient | None = None
+# Holds a strong reference to an in-flight best-effort close task so it is not
+# garbage-collected before it runs (see RUF006).
+_CLOSE_TASK: asyncio.Task[None] | None = None
 
 
 def get_panelapp_service() -> PanelAppService:
-    """Return the shared PanelAppService, reopening the database when it changes.
+    """Return the shared live PanelAppService, building it on first use.
 
-    Reopens the underlying read-only connection when the database file's mtime
-    changes, so a refresh that atomically swaps ``panelapp.sqlite`` is picked up
-    live. Raises :class:`DataUnavailableError` (via the repository constructor)
-    when the database file is absent.
+    Constructs a single shared :class:`PanelAppRestClient` over the active data
+    config and wraps it in a cached :class:`PanelAppService`. Never touches the
+    network at construction time -- requests only happen when a tool calls a
+    service method.
     """
-    global _CACHED, _CACHED_MTIME, _REPO
+    global _CACHED, _CLIENT
     if _OVERRIDE is not None:
         return _OVERRIDE
-
-    cfg = get_data_config()
-    current_mtime = _db_mtime(cfg.db_path)
-    if _CACHED is not None and current_mtime is not None and current_mtime == _CACHED_MTIME:
+    if _CACHED is not None:
         return _CACHED
 
-    # Imported lazily so capabilities/import paths don't pull the data layer
-    # until a tool actually needs it.
-    from panelapp_link.data.repository import PanelAppRepository
+    from panelapp_link.api.client import PanelAppRestClient
 
-    _close_repo()
-    repo = PanelAppRepository(cfg.db_path)
-    _REPO = repo
-    _CACHED = PanelAppService(repo, cache_size=cfg.cache_size, cache_ttl=cfg.cache_ttl)
-    _CACHED_MTIME = _db_mtime(cfg.db_path)
+    cfg = get_data_config()
+    _CLIENT = PanelAppRestClient(cfg)
+    _CACHED = PanelAppService(_CLIENT, cfg, cache_ttl=cfg.cache_ttl, cache_size=cfg.cache_size)
     return _CACHED
-
-
-def _close_repo() -> None:
-    """Close and drop the cached repository/service, if any."""
-    global _CACHED, _CACHED_MTIME, _REPO
-    if _REPO is not None:
-        close = getattr(_REPO, "close", None)
-        if callable(close):
-            close()
-    _REPO = None
-    _CACHED = None
-    _CACHED_MTIME = None
 
 
 def set_service_for_testing(service: PanelAppService | None) -> None:
@@ -82,5 +58,21 @@ def set_service_for_testing(service: PanelAppService | None) -> None:
 
 
 def reset_panelapp_service() -> None:
-    """Clear the cached service so the next call reopens the database."""
-    _close_repo()
+    """Drop the cached service and close the owned client, if any."""
+    global _CACHED, _CLIENT
+    client = _CLIENT
+    _CACHED = None
+    _CLIENT = None
+    if client is not None:
+        _close_client(client)
+
+
+def _close_client(client: PanelAppRestClient) -> None:
+    """Best-effort async close of a client from a sync context."""
+    global _CLOSE_TASK
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(client.aclose())
+        return
+    _CLOSE_TASK = loop.create_task(client.aclose())

@@ -1,8 +1,15 @@
-"""PanelApp service: business logic over the read-only repository.
+"""PanelApp service: live business logic over the PanelApp REST APIs.
 
-Tools call this layer (never the repository directly). Methods return plain,
-JSON-ready dicts -- the data *payload* only. The MCP tool wrapper adds the
-``_meta`` block, ``next_commands``, and the success/error envelope.
+Tools call this layer (never the REST client directly). All public methods are
+``async`` and return plain, JSON-ready dicts -- the data *payload* only. The MCP
+tool wrapper adds the ``_meta`` block, ``next_commands``, and the success/error
+envelope.
+
+There is no local database: each query calls the live PanelApp API (1-2 calls)
+and memoizes the raw payloads in a small in-memory TTL cache so repeated/related
+queries within the TTL window do not re-hit the upstream. The full panel list per
+region is cheap (summaries only) and is filtered in memory because PanelApp has
+no usable server-side panel search.
 
 Region handling is centralized here: ``region="both"`` fans out to
 ``["uk", "australia"]`` and results are merged (deduped by ``(region, panel_id)``
@@ -13,30 +20,30 @@ opaque base64(JSON ``{"offset": N}``) token, mirroring the fleet contract.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from panelapp_link.config import get_data_config
 from panelapp_link.constants import CONFIDENCE_RANK
-from panelapp_link.data.repository import PanelAppRepository
 from panelapp_link.exceptions import (
-    AmbiguousQueryError,
-    DataUnavailableError,
+    DownloadError,
     InvalidInputError,
     NotFoundError,
 )
 from panelapp_link.models.enums import ENTITY_TYPES, RESPONSE_MODES, ResponseMode
+from panelapp_link.services import _live_helpers as helpers
 from panelapp_link.services import shaping
+
+if TYPE_CHECKING:
+    from panelapp_link.api.client import PanelAppRestClient
+    from panelapp_link.config import PanelAppDataConfigModel
 
 _MAX_LIMIT = 500
 
-# Cap on rows pulled from the repository for a search before dedupe/slice. Both
-# regions together are < 1000 panels, so this lets the service report an exact
-# deduped ``total`` and page deterministically without a repo-side COUNT.
-_SEARCH_FETCH_CAP = 2000
-
-# region argument -> repository region keys.
+# region argument -> region keys.
 _REGION_MAP: dict[str, list[str]] = {
     "both": ["uk", "australia"],
     "uk": ["uk"],
@@ -54,9 +61,9 @@ class _TTLCache:
     def __init__(self, maxsize: int, ttl: int) -> None:
         self._maxsize = maxsize
         self._ttl = ttl
-        self._store: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._store: dict[str, tuple[float, Any]] = {}
 
-    def get(self, key: str) -> dict[str, Any] | None:
+    def get(self, key: str) -> Any | None:
         if self._maxsize <= 0:
             return None
         item = self._store.get(key)
@@ -68,12 +75,15 @@ class _TTLCache:
             return None
         return value
 
-    def put(self, key: str, value: dict[str, Any]) -> None:
+    def put(self, key: str, value: Any) -> None:
         if self._maxsize <= 0:
             return
-        if len(self._store) >= self._maxsize:
+        if len(self._store) >= self._maxsize and key not in self._store:
             self._store.pop(next(iter(self._store)), None)
         self._store[key] = (time.monotonic() + self._ttl, value)
+
+    def stats(self) -> dict[str, int]:
+        return {"entries": len(self._store), "maxsize": self._maxsize, "ttl": self._ttl}
 
 
 def _encode_cursor(offset: int) -> str:
@@ -96,23 +106,30 @@ def _decode_cursor(cursor: str) -> int:
 
 
 class PanelAppService:
-    """Read-only business logic over the PanelApp SQLite index."""
+    """Live business logic over the PanelApp REST APIs (UK + Australia)."""
 
     def __init__(
         self,
-        repository: PanelAppRepository,
+        client: PanelAppRestClient,
+        config: PanelAppDataConfigModel | None = None,
         *,
+        cache_ttl: int = 21600,
         cache_size: int = 512,
-        cache_ttl: int = 3600,
     ) -> None:
-        self._repo = repository
+        self._client = client
+        self._config = config if config is not None else get_data_config()
         self._cache = _TTLCache(cache_size, cache_ttl)
+        self._cache_ttl = cache_ttl
+        self._base_by_region: dict[str, str] = {
+            "uk": self._config.uk_api_url,
+            "australia": self._config.au_api_url,
+        }
 
-    # --- helpers --------------------------------------------------------
+    # --- validation helpers --------------------------------------------
 
     @staticmethod
     def _normalize_region(region: str) -> list[str]:
-        """Map a ``region`` argument to repository region keys.
+        """Map a ``region`` argument to region keys.
 
         ``"both"`` -> ``["uk", "australia"]``; ``"uk"``/``"australia"`` ->
         single-element lists. Anything else raises ``InvalidInputError``.
@@ -183,36 +200,67 @@ class PanelAppService:
             "hint": _TRUNCATION_HINT,
         }
 
-    @staticmethod
-    def _coalesce_gene(
-        gene_symbol: str | None,
-        hgnc_id: str | None,
-        query: str | None = None,
-    ) -> tuple[str | None, str | None]:
-        """Coalesce gene inputs to ``(gene_symbol_upper, hgnc_id)``.
+    # --- cached live fetches -------------------------------------------
 
-        Precedence: explicit ``hgnc_id`` > explicit ``gene_symbol`` > free-text
-        ``query`` (an ``HGNC:`` prefix routes to hgnc_id, else a symbol). Raises
-        ``InvalidInputError`` when nothing usable is supplied.
-        """
-        hid = (hgnc_id or "").strip() or None
-        sym = (gene_symbol or "").strip() or None
-        if hid is None and sym is None and query:
-            q = query.strip()
-            if q.upper().startswith("HGNC:"):
-                hid = q
-            elif q:
-                sym = q
-        if hid is None and sym is None:
-            raise InvalidInputError(
-                "Provide a gene_symbol or hgnc_id (or a non-empty query).",
-                field="gene_symbol",
-            )
-        return (sym.upper() if sym else None, hid)
+    async def _panel_list(self, region_key: str) -> list[dict[str, Any]]:
+        """Return (cached) the full panel-summary list for a region."""
+        key = f"panels:{region_key}"
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached  # type: ignore[no-any-return]
+        rows = await self._client.list_panels(self._base_by_region[region_key])
+        self._cache.put(key, rows)
+        return rows
+
+    async def _signed_off_map(self, region_key: str) -> dict[int, dict[str, Any]]:
+        """Return (cached, lazy) ``{panel_id: {version, signed_off}}`` for a region."""
+        key = f"signedoff:{region_key}"
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached  # type: ignore[no-any-return]
+        rows = await self._client.list_signed_off(self._base_by_region[region_key])
+        out: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            pid = row.get("id")
+            if pid is None:
+                continue
+            out[int(pid)] = {"version": row.get("version"), "signed_off": row.get("signed_off")}
+        self._cache.put(key, out)
+        return out
+
+    async def _panel_detail(self, region_key: str, panel_id: int) -> dict[str, Any]:
+        """Return (cached) the full panel detail for a region/id, mapping 404 -> NotFound."""
+        key = f"panel:{region_key}:{panel_id}"
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached  # type: ignore[no-any-return]
+        try:
+            detail = await self._client.get_panel(self._base_by_region[region_key], panel_id)
+        except DownloadError as exc:
+            if exc.status_code == 404:
+                raise NotFoundError(
+                    f"No PanelApp panel {panel_id} in region {region_key!r}. "
+                    "Try search_panels to find a panel id."
+                ) from exc
+            raise
+        self._cache.put(key, detail)
+        return detail
+
+    async def _genes_by_name(self, region_key: str, entity_name: str) -> list[dict[str, Any]]:
+        """Return (cached) ``/genes/?entity_name=`` results for a region."""
+        key = f"genes:{region_key}:{entity_name.upper()}"
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached  # type: ignore[no-any-return]
+        rows = await self._client.get_genes_by_entity_name(
+            self._base_by_region[region_key], entity_name
+        )
+        self._cache.put(key, rows)
+        return rows
 
     # --- search ---------------------------------------------------------
 
-    def search_panels(
+    async def search_panels(
         self,
         query: str = "",
         region: str = "both",
@@ -223,8 +271,11 @@ class PanelAppService:
     ) -> dict[str, Any]:
         """Search panels by name/disorders/disease group, merged across regions.
 
-        Returns ``{"query","count","total","panels":[...],"truncated"?}``. Panels
-        are deduped by ``(region, panel_id)``; paging is over the deduped set.
+        Fetches the (cached) full panel list per region and filters it in memory
+        (case-insensitive substring over name + relevant_disorders + disease_group
+        + disease_sub_group; an empty query returns all). Returns
+        ``{"query","count","total","panels":[...],"truncated"?}``. Panels are
+        deduped by ``(region, panel_id)``; paging is over the deduped set.
         """
         if cursor is not None:
             offset = _decode_cursor(cursor)
@@ -233,18 +284,29 @@ class PanelAppService:
         limit = self._clamp_limit(limit)
         offset = self._validate_offset(offset)
         q = (query or "").strip()
+        needle = q.lower()
 
-        rows = self._repo.search_panels(q, regions, _SEARCH_FETCH_CAP, 0)
         seen: set[tuple[str, int]] = set()
-        deduped: list[dict[str, Any]] = []
-        for row in rows:
-            key = (row["region"], row["panel_id"])
-            if key in seen:
-                continue
-            seen.add(key)
-            deduped.append(row)
-        total = len(deduped)
-        page = deduped[offset : offset + limit]
+        normalized: list[dict[str, Any]] = []
+        for region_key in regions:
+            panels = await self._panel_list(region_key)
+            signed = await self._signed_off_map(region_key)
+            for panel in panels:
+                pid = panel.get("id")
+                if pid is None:
+                    continue
+                pid_int = int(pid)
+                key = (region_key, pid_int)
+                if key in seen:
+                    continue
+                if needle and not helpers.panel_matches(panel, needle):
+                    continue
+                seen.add(key)
+                normalized.append(shaping.normalize_panel(panel, region_key, signed.get(pid_int)))
+
+        normalized.sort(key=lambda p: ((p.get("name") or "").lower(), p.get("region") or ""))
+        total = len(normalized)
+        page = normalized[offset : offset + limit]
         payload: dict[str, Any] = {
             "query": q,
             "count": len(page),
@@ -258,7 +320,7 @@ class PanelAppService:
 
     # --- panel detail ---------------------------------------------------
 
-    def get_panel(
+    async def get_panel(
         self,
         panel_id: int,
         region: str,
@@ -276,16 +338,13 @@ class PanelAppService:
                 "per-region; 'both' is not allowed).",
                 field="region",
             )
-        regions = self._normalize_region(region)
-        row = self._repo.get_panel(regions[0], panel_id)
-        if row is None:
-            raise NotFoundError(
-                f"No PanelApp panel {panel_id} in region {region!r}. "
-                "Try search_panels to find a panel id."
-            )
+        region_key = self._normalize_region(region)[0]
+        detail = await self._panel_detail(region_key, panel_id)
+        signed = await self._signed_off_map(region_key)
+        row = shaping.normalize_panel(detail, region_key, signed.get(panel_id))
         return {"panel": shaping.shape_panel(row, mode)}
 
-    def get_panel_genes(
+    async def get_panel_genes(
         self,
         panel_id: int,
         region: str,
@@ -309,42 +368,39 @@ class PanelAppService:
                 "region must be 'uk' or 'australia' for get_panel_genes.",
                 field="region",
             )
-        regions = self._normalize_region(region)
+        region_key = self._normalize_region(region)[0]
         entity_type = self._validate_entity_type(entity_type)
         min_rank = self._min_rank(min_confidence)
         limit = self._clamp_limit(limit)
         offset = self._validate_offset(offset)
-        region_key = regions[0]
 
-        # One extra row tells us whether a further page exists without a COUNT.
-        rows = self._repo.get_panel_entities(
-            region_key, panel_id, entity_type, min_rank, limit + 1, offset
-        )
-        has_more = len(rows) > limit
-        page = rows[:limit]
-        total = offset + len(page) + (1 if has_more else 0)
+        detail = await self._panel_detail(region_key, panel_id)
+        panel_name = detail.get("name") or ""
+        raw_entities = helpers.select_entities(detail, entity_type)
+        normalized = [
+            shaping.normalize_entity(raw, region_key, panel_id, panel_name) for raw in raw_entities
+        ]
+        if min_rank is not None:
+            normalized = [e for e in normalized if (e.get("confidence_rank") or 0) >= min_rank]
+
+        total = len(normalized)
+        page = normalized[offset : offset + limit]
         payload: dict[str, Any] = {
             "panel_id": panel_id,
             "region": region_key,
             "entity_type": entity_type,
             "count": len(page),
             "total": total,
-            "entities": [shaping.shape_entity(r, mode) for r in page],
+            "entities": [shaping.shape_entity(e, mode) for e in page],
         }
-        if has_more:
-            next_offset = offset + len(page)
-            payload["truncated"] = {
-                "total": total,
-                "returned": len(page),
-                "next_offset": next_offset,
-                "next_cursor": _encode_cursor(next_offset),
-                "hint": _TRUNCATION_HINT,
-            }
+        trunc = self._truncation(total, limit, offset, len(page))
+        if trunc:
+            payload["truncated"] = trunc
         return payload
 
     # --- gene -> panels -------------------------------------------------
 
-    def get_gene_panels(
+    async def get_gene_panels(
         self,
         gene_symbol: str | None = None,
         hgnc_id: str | None = None,
@@ -354,104 +410,127 @@ class PanelAppService:
     ) -> dict[str, Any]:
         """Return the panels a gene appears on, across regions, sorted by confidence.
 
-        Returns ``{"gene","count","panels":[...]}`` where ``panels`` are shaped
-        ``GenePanelHit`` rows ordered by confidence rank (desc) then region.
-        Raises ``NotFoundError`` when the gene is absent.
+        PanelApp is queried by ``entity_name`` (gene symbol). A bare ``hgnc_id``
+        cannot drive the query, so ``gene_symbol`` is required; ``hgnc_id`` (when
+        supplied alongside) filters the hits. Returns ``{"gene","count","panels"}``
+        where ``panels`` are shaped ``GenePanelHit`` rows ordered by confidence
+        rank (desc) then region. Raises ``NotFoundError`` when the gene is absent.
         """
         self._validate_mode(response_mode)
         regions = self._normalize_region(region)
         min_rank = self._min_rank(min_confidence)
-        gene_upper, hid = self._coalesce_gene(gene_symbol, hgnc_id)
+        symbol = (gene_symbol or "").strip()
+        if not symbol:
+            raise InvalidInputError(
+                "Provide gene_symbol. PanelApp is queried by gene symbol; an "
+                "hgnc_id alone cannot drive the query.",
+                field="gene_symbol",
+            )
+        hid = (hgnc_id or "").strip() or None
 
-        gene_rows = self._repo.resolve_gene(gene_symbol_upper=gene_upper, hgnc_id=hid)
-        if not gene_rows:
-            ident = hid or gene_upper
+        results = await self._gather_gene_results(regions, symbol)
+        if not results:
             raise NotFoundError(
-                f"No PanelApp gene found for {ident!r}. Try resolve_gene to confirm a symbol."
+                f"No PanelApp gene found for {symbol!r}. Try resolve_gene to confirm a symbol."
             )
-        if len({r["gene_symbol_upper"] for r in gene_rows}) > 1:
-            candidates = sorted({r["gene_symbol"] for r in gene_rows})
-            raise AmbiguousQueryError(
-                f"{(hid or gene_upper)!r} matches multiple genes: {', '.join(candidates)}. "
-                "Re-run get_gene_panels with a specific gene_symbol.",
-                candidates=candidates,
-            )
-        gene = gene_rows[0]
 
-        hits = self._repo.get_gene_panels(
-            gene_symbol_upper=gene["gene_symbol_upper"],
-            hgnc_id=None,
-            regions=regions,
-            min_rank=min_rank,
-        )
-        hits.sort(
-            key=lambda h: (-(h.get("confidence_rank") or 0), h.get("region") or ""),
-        )
+        hits: list[dict[str, Any]] = []
+        for region_key, result in results:
+            gene_data = result.get("gene_data") or {}
+            if hid is not None and gene_data.get("hgnc_id") != hid:
+                continue
+            panel = result.get("panel") or {}
+            level, label, rank = helpers.confidence(result.get("confidence_level"))
+            if min_rank is not None and (rank or 0) < min_rank:
+                continue
+            hits.append(
+                {
+                    "region": region_key,
+                    "panel_id": int(panel["id"]) if panel.get("id") is not None else None,
+                    "panel_name": panel.get("name"),
+                    "version": helpers.as_str(panel.get("version")),
+                    "confidence_label": label,
+                    "confidence_level": level,
+                    "confidence_rank": rank,
+                    "mode_of_inheritance": result.get("mode_of_inheritance"),
+                }
+            )
+
+        hits.sort(key=lambda h: (-(h.get("confidence_rank") or 0), h.get("region") or ""))
         return {
-            "gene": shaping.shape_gene(gene),
+            "gene": helpers.gene_identity(symbol, results, hits),
             "count": len(hits),
             "panels": [shaping.shape_gene_panel_hit(h) for h in hits],
         }
 
-    def resolve_gene(
+    async def resolve_gene(
         self,
         query: str | None = None,
         gene_symbol: str | None = None,
         hgnc_id: str | None = None,
         response_mode: str = "compact",
     ) -> dict[str, Any]:
-        """Resolve free-text / symbol / hgnc id to a single rolled-up gene.
+        """Resolve a symbol / free-text query to a single rolled-up gene.
 
-        Returns ``{"query","gene","matches":[...]}``. Raises ``NotFoundError``
-        when nothing matches and ``AmbiguousQueryError`` when an hgnc id maps to
-        more than one distinct gene symbol.
+        Returns ``{"query","gene","matches":[...]}``. PanelApp resolves by gene
+        symbol; ``query`` and ``gene_symbol`` are accepted (``query`` wins when
+        ``gene_symbol`` is empty). Raises ``NotFoundError`` when nothing matches.
         """
         self._validate_mode(response_mode)
-        gene_upper, hid = self._coalesce_gene(gene_symbol, hgnc_id, query)
-        resolved_query = hid or gene_upper
-
-        matches = self._repo.resolve_gene(gene_symbol_upper=gene_upper, hgnc_id=hid)
-        if not matches:
+        symbol = (gene_symbol or "").strip() or (query or "").strip()
+        if not symbol:
+            raise InvalidInputError(
+                "Provide a gene_symbol or a non-empty query (PanelApp resolves by gene symbol).",
+                field="gene_symbol",
+            )
+        regions = self._normalize_region("both")
+        results = await self._gather_gene_results(regions, symbol)
+        if not results:
             raise NotFoundError(
-                f"Could not resolve {resolved_query!r} to a PanelApp gene. "
+                f"Could not resolve {symbol!r} to a PanelApp gene. "
                 "Try search_panels to discover panels first."
             )
-        distinct = {m["gene_symbol_upper"] for m in matches}
-        if len(distinct) > 1:
-            candidates = sorted({m["gene_symbol"] for m in matches})
-            raise AmbiguousQueryError(
-                f"{resolved_query!r} matches multiple genes: {', '.join(candidates)}.",
-                candidates=candidates,
-            )
-        shaped = [shaping.shape_gene(m) for m in matches]
+        gene = helpers.gene_identity(symbol, results, helpers.results_to_hits(results))
         return {
-            "query": resolved_query,
-            "gene": shaped[0],
-            "matches": shaped,
+            "query": symbol.upper(),
+            "gene": gene,
+            "matches": [gene],
         }
+
+    async def _gather_gene_results(
+        self, regions: list[str], symbol: str
+    ) -> list[tuple[str, dict[str, Any]]]:
+        """Fetch ``/genes/?entity_name=`` for each region and tag results by region."""
+        per_region = await asyncio.gather(
+            *(self._genes_by_name(region_key, symbol) for region_key in regions)
+        )
+        out: list[tuple[str, dict[str, Any]]] = []
+        for region_key, rows in zip(regions, per_region, strict=True):
+            for row in rows:
+                out.append((region_key, row))
+        return out
 
     # --- discovery ------------------------------------------------------
 
     def capabilities_data(self) -> dict[str, Any]:
-        """Return live data freshness for capabilities, degrading gracefully.
-
-        On a missing/unbuilt database returns ``{"status": "data_unavailable"}``
-        rather than raising, so capabilities stays answerable.
-        """
-        try:
-            meta = self._repo.get_meta()
-        except DataUnavailableError:
-            return {"status": "data_unavailable"}
+        """Return the live data block for capabilities (never raises)."""
         return {
-            "status": "ok",
-            "schema_version": meta.get("schema_version"),
-            "uk_panel_count": meta.get("uk_panel_count", 0),
-            "au_panel_count": meta.get("au_panel_count", 0),
-            "entity_count": meta.get("entity_count", 0),
-            "gene_count": meta.get("gene_count", 0),
-            "build_utc": meta.get("build_utc"),
+            "mode": "live",
+            "sources": {
+                "uk": self._config.uk_api_url,
+                "australia": self._config.au_api_url,
+            },
+            "cache_ttl_seconds": self._cache_ttl,
         }
 
     def diagnostics(self) -> dict[str, Any]:
-        """Return full build provenance from ``meta`` (raises if unavailable)."""
-        return self._repo.get_meta()
+        """Return live source/config + cache stats (never raises)."""
+        return {
+            "mode": "live",
+            "sources": {
+                "uk": self._config.uk_api_url,
+                "australia": self._config.au_api_url,
+            },
+            "cache_ttl_seconds": self._cache_ttl,
+            "cache": self._cache.stats(),
+        }

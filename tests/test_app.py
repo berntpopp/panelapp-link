@@ -1,21 +1,19 @@
 """Integration tests for the PanelApp-Link facade, app, and entry points.
 
-These tests construct the FastMCP facade and the FastAPI app WITHOUT a database
-present and without any network access. App construction (and the facade) must
-never touch the database or the network; that only happens when the app is
-actually served (in the lifespan), which these tests never trigger.
+These tests construct the FastMCP facade and the FastAPI app without any network
+access. App construction (and the facade) never touch the network; the live
+backend only makes requests when a tool is invoked, never at construction or
+startup, so none of these tests hit PanelApp.
 """
 
 from __future__ import annotations
 
 import importlib
 import warnings
-from pathlib import Path
 
-import pytest
 from fastapi import FastAPI
 
-from panelapp_link.config import PanelAppDataConfigModel, settings
+from panelapp_link.config import settings
 from panelapp_link.mcp.facade import create_panelapp_mcp
 from panelapp_link.server_manager import UnifiedServerManager, create_app
 
@@ -32,15 +30,6 @@ EXPECTED_TOOLS = {
     "get_server_capabilities",
     "get_panelapp_diagnostics",
 }
-
-
-@pytest.fixture
-def _no_database(tmp_path: Path) -> None:
-    """Point the data dir at an empty temp dir so no database exists."""
-    settings.data = PanelAppDataConfigModel(
-        data_dir=tmp_path / "empty", db_filename="panelapp.sqlite"
-    )
-    assert not settings.data.db_path.exists()
 
 
 # --- Facade ---------------------------------------------------------------
@@ -60,39 +49,40 @@ def test_facade_is_named_and_instructed() -> None:
     assert mcp.instructions
 
 
-# --- FastAPI app (no database present) ------------------------------------
+# --- FastAPI app (no database, no network) --------------------------------
 
 
-def test_create_app_returns_fastapi(_no_database: None) -> None:
+def test_create_app_returns_fastapi() -> None:
     assert isinstance(create_app(), FastAPI)
 
 
-def test_server_manager_builds_app(_no_database: None) -> None:
+def test_server_manager_builds_app() -> None:
     manager = UnifiedServerManager()
     assert isinstance(manager.build_app(), FastAPI)
 
 
-def test_app_has_health_route(_no_database: None) -> None:
+def test_app_has_health_route() -> None:
     app = create_app()
     paths = {route.path for route in app.routes}  # type: ignore[attr-defined]
     assert "/health" in paths
     assert "/api/health" in paths
 
 
-def test_health_endpoint_responds_without_database(_no_database: None) -> None:
+def test_health_endpoint_reports_live_status() -> None:
     # TestClient does not enter the lifespan unless used as a context manager,
-    # so no bootstrap/scheduler/network runs here.
+    # so nothing touches the network here.
     client = TestClient(create_app())
     resp = client.get("/health")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
     assert "version" in body
-    # No database present -> data status must degrade gracefully, not raise.
-    assert body["data"]["status"] in {"ready", "unavailable", "data_unavailable"}
+    # The live backend reports its mode + sources without any network call.
+    assert body["data"]["mode"] == "live"
+    assert "uk" in body["data"]["sources"]
 
 
-def test_root_advertises_mcp_endpoint(_no_database: None) -> None:
+def test_root_advertises_mcp_endpoint() -> None:
     client = TestClient(create_app())
     resp = client.get("/")
     assert resp.status_code == 200
@@ -101,7 +91,7 @@ def test_root_advertises_mcp_endpoint(_no_database: None) -> None:
     assert body["mcp_endpoint"] == settings.mcp_path
 
 
-def test_mcp_mounts_at_configured_path(_no_database: None) -> None:
+def test_mcp_mounts_at_configured_path() -> None:
     # Compose the app + MCP exactly like start_unified_server does, but without
     # serving it, and assert the MCP ASGI app is mounted at settings.mcp_path.
     app = create_app()

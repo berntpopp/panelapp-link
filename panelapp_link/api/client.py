@@ -1,11 +1,11 @@
 """Async HTTP client for the live PanelApp REST APIs.
 
-Used by the ingest crawler (``panelapp_link.ingest``) to mirror both regions
-(Genomics England UK and PanelApp Australia) into local SQLite. The base URL is
-supplied per call so a single client can crawl both regions. PanelApp uses DRF
-pagination (``count``/``next``/``results``); list endpoints follow ``next``
-until exhausted. A concurrency cap plus jittered exponential backoff keeps us
-polite to the upstream APIs.
+Used by the live :class:`~panelapp_link.services.panelapp_service.PanelAppService`
+to answer queries against both regions (Genomics England UK and PanelApp
+Australia) at request time. The base URL is supplied per call so a single client
+can serve both regions. PanelApp uses DRF pagination (``count``/``next``/
+``results``); list endpoints follow ``next`` until exhausted. A concurrency cap
+plus jittered exponential backoff keeps us polite to the upstream APIs.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import random
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 import httpx
 
@@ -24,10 +25,10 @@ if TYPE_CHECKING:
 _RETRYABLE_STATUS = frozenset({500, 502, 503, 504})
 _BACKOFF_BASE_SECONDS = 0.5
 _BACKOFF_MAX_SECONDS = 8.0
-# 429 is retried (it is the normal back-pressure signal during a bulk crawl of
-# both regions); it gets a longer ceiling and honours ``Retry-After``. 403 is
-# treated as a hard denial and is never retried.
-_RATE_LIMIT_MAX_SECONDS = 30.0
+# 429 is retried (it is the normal back-pressure signal); it gets a longer
+# ceiling and honours ``Retry-After`` (PanelApp sends ``Retry-After: 60``). 403
+# is treated as a hard denial and is never retried.
+_RATE_LIMIT_MAX_SECONDS = 120.0
 
 
 def _parse_retry_after(value: str | None) -> float | None:
@@ -141,6 +142,17 @@ class PanelAppRestClient:
     async def get_panel(self, base_url: str, panel_id: int) -> dict[str, Any]:
         """Return the full panel detail (genes/regions/strs) for ``panel_id``."""
         return await self._request(f"{base_url}/panels/{panel_id}/")
+
+    async def get_genes_by_entity_name(
+        self, base_url: str, entity_name: str
+    ) -> list[dict[str, Any]]:
+        """Return every ``/genes/?entity_name=`` result for ``entity_name``.
+
+        Each result is an entity record that also carries a full ``panel``
+        object, so this single call is the source for both ``get_gene_panels``
+        and ``resolve_gene``. DRF ``next`` pages are followed to exhaustion.
+        """
+        return await self._list_paginated(f"{base_url}/genes/?entity_name={quote(entity_name)}")
 
     async def aclose(self) -> None:
         """Close the underlying client if we own it."""

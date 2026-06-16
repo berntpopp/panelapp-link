@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
-
-import pytest
 
 from panelapp_link.mcp.capabilities import (
     TOOLS,
@@ -108,20 +105,16 @@ class TestCapabilitiesVersion:
 
 
 class TestDataBlock:
-    def test_data_unavailable_without_db(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # Point the config at a guaranteed-nonexistent DB path.
-        import panelapp_link.config as cfg
-
-        class _FakeCfg:
-            db_path = Path("/nonexistent/panelapp-link-test/does-not-exist.sqlite")
-
-        monkeypatch.setattr(cfg, "get_data_config", lambda: _FakeCfg())
+    def test_data_block_is_live(self) -> None:
         caps = build_capabilities()
-        assert caps["data"]["status"] == "data_unavailable"
+        assert caps["data"]["mode"] == "live"
+        assert "uk" in caps["data"]["sources"]
+        assert "australia" in caps["data"]["sources"]
+        assert "cache_ttl_seconds" in caps["data"]
 
-    def test_data_status_always_present(self) -> None:
-        caps = build_capabilities()
-        assert "status" in caps["data"]
+    def test_data_block_outside_hash(self) -> None:
+        # The live data block lives outside the hashed static surface.
+        assert build_capabilities()["capabilities_version"] == capabilities_version()
 
 
 class TestRegisterResources:

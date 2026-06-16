@@ -203,3 +203,76 @@ def test_shape_panel_always_carries_identity(mode: str) -> None:
     assert out["panel_id"] == 1207
     assert out["name"] == "Acute intermittent porphyria"
     assert out["region"] == "uk"
+
+
+# --- normalize_panel / normalize_entity ------------------------------------
+
+
+def test_normalize_panel_summary() -> None:
+    live = {
+        "id": 1207,
+        "name": "Acute intermittent porphyria",
+        "version": 2.1,
+        "disease_group": "Gastrohepatology",
+        "relevant_disorders": ["R169"],
+        "stats": {"number_of_genes": 1, "number_of_regions": 0, "number_of_strs": 0},
+    }
+    out = shaping.normalize_panel(live, "uk", {"version": "2.0", "signed_off": "2023-06-01"})
+    assert out["panel_id"] == 1207
+    assert out["region"] == "uk"
+    assert out["version"] == "2.1"  # cast to str
+    assert out["number_of_genes"] == 1
+    assert out["signed_off_version"] == "2.0"
+    assert out["signed_off_date"] == "2023-06-01"
+    # No genes/regions/strs -> no entity_counts on a summary.
+    assert "entity_counts" not in out
+
+
+def test_normalize_panel_detail_includes_entity_counts() -> None:
+    live = {
+        "id": 285,
+        "name": "Intellectual disability",
+        "stats": {},
+        "genes": [{}, {}],
+        "regions": [{}],
+        "strs": [],
+    }
+    out = shaping.normalize_panel(live, "uk", None)
+    assert out["entity_counts"] == {"gene": 2, "region": 1, "str": 0}
+    assert out["signed_off_version"] is None
+
+
+def test_normalize_entity_gene() -> None:
+    live = {
+        "entity_type": "gene",
+        "entity_name": "HMBS",
+        "confidence_level": "3",
+        "gene_data": {"gene_symbol": "HMBS", "hgnc_id": "HGNC:4982", "omim_gene": ["609806"]},
+        "mode_of_inheritance": "BIALLELIC",
+        "phenotypes": ["AIP"],
+    }
+    out = shaping.normalize_entity(live, "uk", 1207, "Acute intermittent porphyria")
+    assert out["gene_symbol"] == "HMBS"
+    assert out["gene_symbol_upper"] == "HMBS"
+    assert out["hgnc_id"] == "HGNC:4982"
+    assert out["confidence_label"] == "green"
+    assert out["confidence_rank"] == 3
+    assert out["omim"] == ["609806"]
+    assert out["panel_name"] == "Acute intermittent porphyria"
+    assert out["extra"] == {}
+
+
+def test_normalize_entity_str_packs_extra() -> None:
+    live = {
+        "entity_type": "str",
+        "entity_name": "DMPK_CTG",
+        "confidence_level": "3",
+        "gene_data": {"gene_symbol": "DMPK"},
+        "repeated_sequence": "CTG",
+        "chromosome": "19",
+        "normal_repeats": 35,
+    }
+    out = shaping.normalize_entity(live, "uk", 285, "Intellectual disability")
+    assert out["extra"]["repeated_sequence"] == "CTG"
+    assert out["extra"]["chromosome"] == "19"
+    assert out["extra"]["normal_repeats"] == 35

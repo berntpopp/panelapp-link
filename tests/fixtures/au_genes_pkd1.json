@@ -1,0 +1,288 @@
+{
+ "count": 3,
+ "next": null,
+ "previous": null,
+ "results": [
+  {
+   "gene_data": {
+    "alias": [
+     "PBP",
+     "Pc-1",
+     "TRPP1"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:9008",
+    "gene_name": "polycystin 1, transient receptor potential channel interacting",
+    "omim_gene": [
+     "601313"
+    ],
+    "alias_name": [
+     "polycystin 1",
+     "transient receptor potential cation channel, subfamily P, member 1"
+    ],
+    "gene_symbol": "PKD1",
+    "hgnc_symbol": "PKD1",
+    "hgnc_release": "2023-01-20",
+    "ensembl_genes": {
+     "GRch37": {
+      "87": {
+       "location": "16:2138711-2185899",
+       "ensembl_id": "ENSG00000008710"
+      }
+     },
+     "GRch38": {
+      "115": {
+       "location": "16:2088708-2135898",
+       "ensembl_id": "ENSG00000008710"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": null
+   },
+   "entity_type": "gene",
+   "entity_name": "PKD1",
+   "confidence_level": "3",
+   "penetrance": null,
+   "mode_of_pathogenicity": "",
+   "publications": [],
+   "evidence": [
+    "Expert Review Green",
+    "Victorian Clinical Genetics Services"
+   ],
+   "phenotypes": [
+    "Polycystic kidney disease 1, MIM# 173900"
+   ],
+   "mode_of_inheritance": "BOTH monoallelic and biallelic (but BIALLELIC mutations cause a more SEVERE disease form), autosomal or pseudoautosomal",
+   "tags": [],
+   "panel": {
+    "id": 137,
+    "hash_id": null,
+    "name": "Mendeliome",
+    "disease_group": "",
+    "disease_sub_group": "",
+    "description": "The Mendeliome contains genes currently associated with Mendelian gene disorders.\r\n\r\nThe Mendeliome is intended to be used to facilitate panel-agnostic analysis, particularly in complex paediatric patients with multi-system features, while still limiting analysis to genes with published evidence for gene-disease association and minimising the chance of incidental findings. It therefore excludes genes listed in the Incidentalome, such as those associated with some cardiac disorders, cancer predisposition syndromes, and neurodegenerative diseases. If analysis of these genes is required, the relevant disease-specific panel (e.g. Adult Additional Findings, Neurodegenerative Disease_Adult Onset, Regression, Breast Cancer) should be requested.\r\n\r\nPlease note that mitochondrially-encoded genes may only be analysed as part of some genomic tests, e.g. WGS with appropriate accreditation in place. If uncertain, please contact your test provider.\r\n\r\nSTRs are currently on this panel as 'grey' due to lack of clinical accreditation for STR analysis in Australian laboratories.\r\n\r\nThis panel was originally developed by VCGS and is a consensus panel used by RMH.",
+    "status": "public",
+    "version": "2.55",
+    "version_created": "2026-06-17T03:10:28.752680+10:00",
+    "relevant_disorders": [],
+    "stats": {
+     "number_of_genes": 6069,
+     "number_of_strs": 43,
+     "number_of_regions": 11
+    },
+    "types": [
+     {
+      "name": "Victorian Clinical Genetics Services",
+      "slug": "victorian-clinical-genetics-services",
+      "description": "Panel used by VCGS."
+     },
+     {
+      "name": "Rare Disease",
+      "slug": "rare-disease",
+      "description": "Rare disease panels"
+     },
+     {
+      "name": "Royal Melbourne Hospital",
+      "slug": "royal-melbourne-hospital",
+      "description": "Royal Melbourne Hospital"
+     }
+    ],
+    "child_panel_ids": []
+   },
+   "transcript": null
+  },
+  {
+   "gene_data": {
+    "alias": [
+     "PBP",
+     "Pc-1",
+     "TRPP1"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:9008",
+    "gene_name": "polycystin 1, transient receptor potential channel interacting",
+    "omim_gene": [
+     "601313"
+    ],
+    "alias_name": [
+     "polycystin 1",
+     "transient receptor potential cation channel, subfamily P, member 1"
+    ],
+    "gene_symbol": "PKD1",
+    "hgnc_symbol": "PKD1",
+    "hgnc_release": "2023-01-20",
+    "ensembl_genes": {
+     "GRch37": {
+      "87": {
+       "location": "16:2138711-2185899",
+       "ensembl_id": "ENSG00000008710"
+      }
+     },
+     "GRch38": {
+      "115": {
+       "location": "16:2088708-2135898",
+       "ensembl_id": "ENSG00000008710"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": null
+   },
+   "entity_type": "gene",
+   "entity_name": "PKD1",
+   "confidence_level": "3",
+   "penetrance": null,
+   "mode_of_pathogenicity": "",
+   "publications": [],
+   "evidence": [
+    "Expert Review Green",
+    "KidGen_Cystic v38.1.0"
+   ],
+   "phenotypes": [
+    "Polycystic kidney disease 1, MIM# 173900"
+   ],
+   "mode_of_inheritance": "BOTH monoallelic and biallelic (but BIALLELIC mutations cause a more SEVERE disease form), autosomal or pseudoautosomal",
+   "tags": [],
+   "panel": {
+    "id": 194,
+    "hash_id": null,
+    "name": "Renal Macrocystic Disease",
+    "disease_group": "Renal and urinary tract disorders",
+    "disease_sub_group": "",
+    "description": "This panel is developed was developed and is maintained by the KidGen Collaborative, and is a consensus panel used by VCGS, GHQ, and RMH.\r\n\r\nThis panel contains genes that cause macrocystic kidney disease. Many of the disorders also have a polycystic liver disease, either as the predominant phenotype or in association with primary kidney cysts.",
+    "status": "public",
+    "version": "2.0",
+    "version_created": "2026-06-07T08:15:51.650744+10:00",
+    "relevant_disorders": [
+     "Renal cyst",
+     "HP:0000107"
+    ],
+    "stats": {
+     "number_of_genes": 31,
+     "number_of_strs": 0,
+     "number_of_regions": 1
+    },
+    "types": [
+     {
+      "name": "Victorian Clinical Genetics Services",
+      "slug": "victorian-clinical-genetics-services",
+      "description": "Panel used by VCGS."
+     },
+     {
+      "name": "KidGen",
+      "slug": "kidgen",
+      "description": "Panel used by the KidGen Collaborative."
+     },
+     {
+      "name": "Rare Disease",
+      "slug": "rare-disease",
+      "description": "Rare disease panels"
+     },
+     {
+      "name": "Royal Melbourne Hospital",
+      "slug": "royal-melbourne-hospital",
+      "description": "Royal Melbourne Hospital"
+     },
+     {
+      "name": "Genetic Health Queensland",
+      "slug": "genetic-health-queensland",
+      "description": "Panel used by GHQ."
+     }
+    ],
+    "child_panel_ids": []
+   },
+   "transcript": null
+  },
+  {
+   "gene_data": {
+    "alias": [
+     "PBP",
+     "Pc-1",
+     "TRPP1"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:9008",
+    "gene_name": "polycystin 1, transient receptor potential channel interacting",
+    "omim_gene": [
+     "601313"
+    ],
+    "alias_name": [
+     "polycystin 1",
+     "transient receptor potential cation channel, subfamily P, member 1"
+    ],
+    "gene_symbol": "PKD1",
+    "hgnc_symbol": "PKD1",
+    "hgnc_release": "2023-01-20",
+    "ensembl_genes": {
+     "GRch37": {
+      "87": {
+       "location": "16:2138711-2185899",
+       "ensembl_id": "ENSG00000008710"
+      }
+     },
+     "GRch38": {
+      "115": {
+       "location": "16:2088708-2135898",
+       "ensembl_id": "ENSG00000008710"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": null
+   },
+   "entity_type": "gene",
+   "entity_name": "PKD1",
+   "confidence_level": "3",
+   "penetrance": null,
+   "mode_of_pathogenicity": "",
+   "publications": [],
+   "evidence": [
+    "Expert Review Green",
+    "Expert Review Green",
+    "Genomics England PanelApp",
+    "Victorian Clinical Genetics Services"
+   ],
+   "phenotypes": [
+    "Polycystic kidney disease, adult type I  173900"
+   ],
+   "mode_of_inheritance": "BOTH monoallelic and biallelic, autosomal or pseudoautosomal",
+   "tags": [],
+   "panel": {
+    "id": 3144,
+    "hash_id": null,
+    "name": "Cerebral vascular malformations",
+    "disease_group": "Neurology and neurodevelopmental disorders",
+    "disease_sub_group": "",
+    "description": "This panel contains genes associated with cerebral vascular malformations, including:\r\nVein of Galen malformation\r\nCerebral vascular malformations\r\nMoyamoya disease\r\n\r\nConsider applying the Stroke and Aortopathy_Connective Tissue Disorders panels due to overlap in clinical features.\r\nWith thanks to the Genomics England PanelApp team for the original design.",
+    "status": "public",
+    "version": "2.0",
+    "version_created": "2026-06-07T08:35:04.361320+10:00",
+    "relevant_disorders": [
+     "Abnormal cerebral vascular morphology HP:0100659"
+    ],
+    "stats": {
+     "number_of_genes": 54,
+     "number_of_strs": 0,
+     "number_of_regions": 1
+    },
+    "types": [
+     {
+      "name": "Rare Disease",
+      "slug": "rare-disease",
+      "description": "Rare disease panels"
+     },
+     {
+      "name": "Victorian Clinical Genetics Services",
+      "slug": "victorian-clinical-genetics-services",
+      "description": "Panel used by VCGS."
+     },
+     {
+      "name": "Royal Melbourne Hospital",
+      "slug": "royal-melbourne-hospital",
+      "description": "Royal Melbourne Hospital"
+     }
+    ],
+    "child_panel_ids": []
+   },
+   "transcript": null
+  }
+ ]
+}

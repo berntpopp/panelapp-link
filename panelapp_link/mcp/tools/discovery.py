@@ -47,42 +47,29 @@ def register_discovery_tools(mcp: FastMCP) -> None:
         output_schema=DIAGNOSTICS_SCHEMA,
         tags={"discovery"},
         description=(
-            "Report build provenance and data freshness from the local database: "
-            "schema version, per-region panel counts, entity/gene counts, source "
-            "URLs, and when the database was built. Returns a data_unavailable "
-            "envelope when the database has not been built. Also echoes "
-            "server_version and capabilities_version so a warm client can poll this "
-            "small payload for drift instead of re-fetching full capabilities."
+            "Report live backend status: the data mode (live), the upstream "
+            "PanelApp source URLs (UK + Australia), the in-memory cache TTL, and "
+            "current cache stats. Also echoes server_version and "
+            "capabilities_version so a warm client can poll this small payload for "
+            "drift instead of re-fetching full capabilities."
         ),
     )
     async def get_panelapp_diagnostics() -> dict[str, Any]:
         async def call() -> dict[str, Any]:
-            from panelapp_link.config import get_data_config
             from panelapp_link.mcp.capabilities import capabilities_version, server_version
-            from panelapp_link.services.refresh import get_active_scheduler
 
-            meta = get_panelapp_service().diagnostics()
-            cfg = get_data_config()
-            scheduler = get_active_scheduler()
-            refresh: dict[str, Any] = {
-                "enabled": cfg.refresh_enabled,
-                "interval_hours": cfg.refresh_interval_hours,
-                "scheduler_running": scheduler is not None,
-            }
-            if scheduler is not None:
-                refresh["status"] = scheduler.status
+            data = get_panelapp_service().diagnostics()
+            sources = data.get("sources", {})
             headline = (
-                f"PanelApp data: {meta.get('uk_panel_count', 0)} UK + "
-                f"{meta.get('au_panel_count', 0)} AU panels, "
-                f"{meta.get('entity_count', 0)} entities, {meta.get('gene_count', 0)} genes; "
-                f"built {meta.get('build_utc') or 'unknown'}."
+                f"PanelApp live backend: UK {sources.get('uk', '?')}, "
+                f"AU {sources.get('australia', '?')}; "
+                f"cache TTL {data.get('cache_ttl_seconds', 0)}s."
             )
             return {
                 "headline": headline,
                 "server_version": server_version(),
                 "capabilities_version": capabilities_version(),
-                "data": meta,
-                "refresh": refresh,
+                "data": data,
             }
 
         return await run_mcp_tool(

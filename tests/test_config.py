@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from panelapp_link.config import (
@@ -29,14 +27,8 @@ def test_data_config_defaults() -> None:
     data = PanelAppDataConfigModel()
     assert data.uk_api_url == "https://panelapp.genomicsengland.co.uk/api/v1"
     assert data.au_api_url == "https://panelapp-aus.org/api/v1"
-    assert data.db_filename == "panelapp.sqlite"
+    assert data.cache_ttl == 21600
     assert "PanelApp-Link/" in data.user_agent
-
-
-def test_db_path_is_data_dir_join_filename(tmp_path: Path) -> None:
-    """db_path == data_dir / db_filename."""
-    data = PanelAppDataConfigModel(data_dir=tmp_path, db_filename="custom.sqlite")
-    assert data.db_path == tmp_path / "custom.sqlite"
 
 
 def test_get_data_config_returns_singleton_data() -> None:
@@ -51,9 +43,15 @@ def test_env_prefix_overrides_server_field(monkeypatch: pytest.MonkeyPatch) -> N
     assert s.port == 9123
 
 
-def test_nested_env_override_db_filename(monkeypatch: pytest.MonkeyPatch) -> None:
-    """PANELAPP_LINK_DATA__DB_FILENAME overrides the nested data config."""
-    monkeypatch.setenv("PANELAPP_LINK_DATA__DB_FILENAME", "override.sqlite")
+def test_nested_env_override_uk_api_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PANELAPP_LINK_DATA__UK_API_URL overrides the nested data config."""
+    monkeypatch.setenv("PANELAPP_LINK_DATA__UK_API_URL", "https://uk.example.test/api/v1")
     s = ServerSettings()
-    assert s.data.db_filename == "override.sqlite"
-    assert s.data.db_path.name == "override.sqlite"
+    assert s.data.uk_api_url == "https://uk.example.test/api/v1"
+
+
+def test_nested_env_override_cache_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PANELAPP_LINK_DATA__CACHE_TTL overrides the nested cache TTL."""
+    monkeypatch.setenv("PANELAPP_LINK_DATA__CACHE_TTL", "60")
+    s = ServerSettings()
+    assert s.data.cache_ttl == 60

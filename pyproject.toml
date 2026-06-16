@@ -66,7 +66,6 @@ Changelog = "https://github.com/berntpopp/panelapp-link/blob/main/CHANGELOG.md"
 [project.scripts]
 panelapp-link = "server:main"
 panelapp-link-mcp = "mcp_server:main"
-panelapp-link-data = "panelapp_link.ingest.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["panelapp_link"]
@@ -98,11 +97,6 @@ line-ending = "lf"
 "tests/**/*" = ["S101", "S104", "S110", "T20", "B011", "SIM105", "SIM108", "SIM117"]
 "scripts/**/*" = ["T20"]
 "mcp_server.py" = ["T20"]
-"panelapp_link/ingest/cli.py" = ["T20"]
-# Dynamic SQL in these modules interpolates only `?` placeholders and internal
-# column-name constants; all caller values are bound via parameters (S608 = FP).
-"panelapp_link/data/repository.py" = ["S608"]
-"panelapp_link/ingest/builder.py" = ["S608"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -134,7 +128,6 @@ module = [
     "pydantic_settings.*",
     "httpx.*",
     "uvicorn.*",
-    "typer.*",
 ]
 ignore_missing_imports = true
 

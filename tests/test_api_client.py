@@ -162,6 +162,53 @@ def test_retry_delay_honours_retry_after() -> None:
     assert 12.0 <= delay <= 13.0
 
 
+def test_retry_delay_honours_retry_after_60s() -> None:
+    """A PanelApp ``Retry-After: 60`` is honoured (not capped at the old 30s)."""
+    delay = PanelAppRestClient._retry_delay(0, 429, 60.0)
+    assert 60.0 <= delay <= 61.0
+
+
+def test_retry_delay_caps_retry_after_at_120s() -> None:
+    """Retry-After is honoured up to a 120s ceiling, then clamped."""
+    from panelapp_link.api.client import _RATE_LIMIT_MAX_SECONDS
+
+    assert _RATE_LIMIT_MAX_SECONDS == 120.0
+    delay = PanelAppRestClient._retry_delay(0, 429, 999.0)
+    assert 120.0 <= delay <= 121.0
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_genes_by_entity_name_follows_pagination() -> None:
+    """get_genes_by_entity_name follows DRF ``next`` across pages and quotes the name."""
+    page2 = f"{BASE}/genes/?entity_name=PKD1&page=2"
+    respx.get(f"{BASE}/genes/", params={"page": "2"}).mock(
+        return_value=httpx.Response(
+            200, json={"count": 3, "next": None, "results": [{"entity_name": "PKD1", "panel": {}}]}
+        )
+    )
+    respx.get(f"{BASE}/genes/", params={"entity_name": "PKD1"}).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "count": 3,
+                "next": page2,
+                "results": [
+                    {"entity_name": "PKD1", "panel": {"id": 1}},
+                    {"entity_name": "PKD1", "panel": {"id": 2}},
+                ],
+            },
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        results = await client.get_genes_by_entity_name(BASE, "PKD1")
+    finally:
+        await client.aclose()
+    assert len(results) == 3
+    assert all(r["entity_name"] == "PKD1" for r in results)
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_503_retried_then_download_error() -> None:

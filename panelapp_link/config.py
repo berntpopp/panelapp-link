@@ -1,13 +1,16 @@
 """Configuration management for PanelApp-Link.
 
 Settings load from environment variables prefixed ``PANELAPP_LINK_`` (nested
-config via ``__``, e.g. ``PANELAPP_LINK_DATA__DATA_DIR``) and an optional
+config via ``__``, e.g. ``PANELAPP_LINK_DATA__UK_API_URL``) and an optional
 ``.env`` file.
+
+The service is a pure live-API client: there is no local database or ingest, so
+the data config only describes the upstream APIs, the HTTP client, and the
+in-memory per-query cache.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -15,13 +18,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from panelapp_link import __version__
 
-# Project root: <repo>/panelapp_link/config.py -> <repo>
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_DATA_DIR = _PROJECT_ROOT / "data"
-
 
 class PanelAppDataConfigModel(BaseModel):
-    """PanelApp data source + local store configuration."""
+    """PanelApp live-API source + in-memory cache configuration."""
 
     uk_api_url: str = Field(
         default="https://panelapp.genomicsengland.co.uk/api/v1",
@@ -30,14 +29,6 @@ class PanelAppDataConfigModel(BaseModel):
     au_api_url: str = Field(
         default="https://panelapp-aus.org/api/v1",
         description="Base URL for the PanelApp Australia REST API.",
-    )
-    data_dir: Path = Field(
-        default=_DEFAULT_DATA_DIR,
-        description="Directory holding the built SQLite database and crawl cache.",
-    )
-    db_filename: str = Field(
-        default="panelapp.sqlite",
-        description="SQLite database filename within data_dir.",
     )
     request_timeout: int = Field(
         default=60,
@@ -50,8 +41,8 @@ class PanelAppDataConfigModel(BaseModel):
         ge=1,
         le=64,
         description=(
-            "Max concurrent API requests during a crawl (semaphore size). Kept "
-            "low by default because PanelApp rate-limits aggressive per-IP crawls."
+            "Max concurrent API requests (semaphore size). Kept low by default "
+            "because PanelApp rate-limits aggressive per-IP request bursts."
         ),
     )
     max_retries: int = Field(
@@ -64,39 +55,6 @@ class PanelAppDataConfigModel(BaseModel):
         default=f"PanelApp-Link/{__version__} (+https://github.com/berntpopp/panelapp-link)",
         description="User-Agent sent to the PanelApp APIs.",
     )
-    auto_bootstrap: bool = Field(
-        default=True,
-        description="Build the database on first use by crawling the APIs if absent.",
-    )
-    refresh_enabled: bool = Field(
-        default=True,
-        description=(
-            "Run an in-process scheduler (unified/http transports only) that "
-            "conditionally refreshes the database on an interval. Disable when an "
-            "external scheduler (cron sidecar, k8s CronJob) owns refresh."
-        ),
-    )
-    refresh_interval_hours: float = Field(
-        default=24.0,
-        ge=1.0,
-        le=720.0,
-        description=(
-            "Hours between conditional refresh checks. PanelApp panels change "
-            "incrementally; refresh re-lists and re-fetches only changed panels."
-        ),
-    )
-    refresh_jitter_seconds: int = Field(
-        default=300,
-        ge=0,
-        le=86400,
-        description="Random jitter added to each refresh to avoid thundering herds.",
-    )
-    build_lock_timeout: int = Field(
-        default=600,
-        ge=1,
-        le=3600,
-        description="Seconds to wait for the cross-process build lock before giving up.",
-    )
     cache_size: int = Field(
         default=512,
         ge=0,
@@ -104,21 +62,11 @@ class PanelAppDataConfigModel(BaseModel):
         description="Max entries in the in-process query cache (0 disables).",
     )
     cache_ttl: int = Field(
-        default=3600,
+        default=21600,
         ge=0,
         le=86400,
-        description="Query cache TTL in seconds.",
+        description="In-memory cache TTL in seconds (default 6 hours).",
     )
-
-    @property
-    def db_path(self) -> Path:
-        """Absolute path to the SQLite database file."""
-        return self.data_dir / self.db_filename
-
-    @field_validator("data_dir")
-    @classmethod
-    def _expand_data_dir(cls, v: Path) -> Path:
-        return Path(v).expanduser()
 
 
 class ServerSettings(BaseSettings):
@@ -160,7 +108,7 @@ class ServerSettings(BaseSettings):
     # Data
     data: PanelAppDataConfigModel = Field(
         default_factory=PanelAppDataConfigModel,
-        description="PanelApp data source + store configuration",
+        description="PanelApp live-API source + cache configuration",
     )
 
     @field_validator("mcp_path")
