@@ -1,20 +1,41 @@
-"""PanelApp-Link stdio MCP entrypoint (W0 placeholder).
+#!/usr/bin/env python3
+"""Stdio MCP entry point for Claude Desktop and similar clients.
 
-The real stdio entry (sets env defaults, runs the FastMCP server over stdio)
-lands in the W9 integration barrier. This stub exists so the package builds,
-the ``panelapp-link-mcp`` console script resolves, and force-include packaging
-works during the W0 substrate phase. Replace it in W9.
+For HTTP transport use `server.py --transport unified` or `--transport http`.
 """
 
 from __future__ import annotations
 
+import asyncio
+import os
+import sys
+
 
 def main() -> None:
-    """Entrypoint placeholder; real stdio MCP wiring lands in W9."""
-    raise SystemExit(
-        "panelapp-link-mcp stdio server is not implemented yet (W9 integration "
-        "barrier). This is a W0 scaffold placeholder."
-    )
+    """Run the PanelApp-Link MCP server on the stdio transport."""
+    # Configure environment BEFORE importing anything that may print.
+    os.environ.setdefault("PANELAPP_LINK_TRANSPORT", "stdio")
+    os.environ.setdefault("PYTHONUNBUFFERED", "1")
+    os.environ.setdefault("FASTMCP_DISABLE_BANNER", "1")
+    os.environ.setdefault("FASTMCP_QUIET", "1")
+    os.environ.setdefault("NO_COLOR", "1")
+
+    try:
+        from panelapp_link.logging_config import configure_logging
+        from panelapp_link.server_manager import UnifiedServerManager
+    except Exception as exc:
+        print(f"ERROR: panelapp_link import failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    logger = configure_logging()
+    manager = UnifiedServerManager(logger=logger)
+    try:
+        asyncio.run(manager.start_stdio_server())
+    except KeyboardInterrupt:
+        logger.info("MCP stdio server shutdown requested")
+    except Exception as exc:
+        logger.error("MCP stdio server error", error=str(exc))
+        sys.exit(1)
 
 
 if __name__ == "__main__":

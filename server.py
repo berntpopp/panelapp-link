@@ -1,20 +1,82 @@
-"""PanelApp-Link unified server entrypoint (W0 placeholder).
+#!/usr/bin/env python3
+"""Unified entry point for PanelApp-Link.
 
-The real implementation (argparse transport switch -> UnifiedServerManager)
-lands in the W9 integration barrier. This stub exists so the package builds,
-the ``panelapp-link`` console script resolves, and force-include packaging
-works during the W0 substrate phase. Replace it in W9.
+python server.py --transport unified  # FastAPI + MCP at /mcp (default)
+python server.py --transport http     # FastAPI only
+python server.py --transport stdio    # FastMCP stdio (for Claude Desktop)
 """
 
 from __future__ import annotations
 
+import argparse
+import asyncio
+import signal
+import sys
+from typing import TYPE_CHECKING
+
+from panelapp_link.config import settings
+from panelapp_link.logging_config import configure_logging
+from panelapp_link.server_manager import UnifiedServerManager
+
+if TYPE_CHECKING:
+    from types import FrameType
+
+
+async def _run() -> None:
+    parser = argparse.ArgumentParser(description="PanelApp-Link server")
+    parser.add_argument(
+        "--transport",
+        choices=["unified", "http", "stdio"],
+        default=settings.transport,
+        help="Server transport mode",
+    )
+    parser.add_argument("--host", default=settings.host, help="Server host")
+    parser.add_argument("--port", type=int, default=settings.port, help="Server port")
+    parser.add_argument("--log-level", default=settings.log_level, help="Logging level")
+    args = parser.parse_args()
+
+    settings.transport = args.transport
+    settings.host = args.host
+    settings.port = args.port
+    settings.log_level = args.log_level
+
+    logger = configure_logging()
+    manager = UnifiedServerManager(logger=logger)
+
+    shutdown_task: asyncio.Task[None] | None = None
+
+    def _signal(signum: int, _frame: FrameType | None) -> None:
+        nonlocal shutdown_task
+        logger.info("Received shutdown signal", signal=signum)
+        if shutdown_task is None or shutdown_task.done():
+            shutdown_task = asyncio.create_task(manager.shutdown())
+
+    signal.signal(signal.SIGINT, _signal)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, _signal)
+
+    try:
+        if args.transport == "unified":
+            await manager.start_unified_server(host=args.host, port=args.port)
+        elif args.transport == "http":
+            await manager.start_http_only_server(host=args.host, port=args.port)
+        elif args.transport == "stdio":
+            await manager.start_stdio_server()
+        else:
+            logger.error("Invalid transport", transport=args.transport)
+            sys.exit(1)
+    except KeyboardInterrupt:
+        logger.info("Server shutdown requested")
+    except Exception as exc:
+        logger.error("Server error", error=str(exc))
+        sys.exit(1)
+    finally:
+        await manager.shutdown()
+
 
 def main() -> None:
-    """Entrypoint placeholder; real server wiring lands in W9."""
-    raise SystemExit(
-        "panelapp-link server is not implemented yet (W9 integration barrier). "
-        "This is a W0 scaffold placeholder."
-    )
+    """Run the unified PanelApp-Link entry point."""
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

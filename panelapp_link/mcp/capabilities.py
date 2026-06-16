@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
-import sqlite3
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
 
@@ -199,17 +198,12 @@ def _data_status() -> dict[str, Any]:
     """
     try:
         from panelapp_link.config import get_data_config
-        from panelapp_link.data.repository import (  # type: ignore[import-untyped]
-            PanelAppRepository,
-        )
+        from panelapp_link.data.repository import PanelAppRepository
 
         repo = PanelAppRepository(get_data_config().db_path)
         meta = repo.get_meta()
-        if meta is None:
-            return {"status": "data_unavailable"}
         status: dict[str, Any] = {"status": "ready"}
-        # Pull whatever provenance the meta exposes (dict or model), defensively.
-        meta_dict = meta if isinstance(meta, dict) else _as_dict(meta)
+        meta_dict = dict(meta)
         for key in (
             "schema_version",
             "uk_panel_count",
@@ -223,21 +217,6 @@ def _data_status() -> dict[str, Any]:
         return status
     except Exception:  # ImportError, missing DB, unreadable -- all degrade to unavailable
         return {"status": "data_unavailable"}
-
-
-def _as_dict(meta: Any) -> dict[str, Any]:
-    """Coerce a meta object (pydantic model / Row / mapping) to a plain dict."""
-    if hasattr(meta, "model_dump"):
-        return dict(meta.model_dump())
-    if isinstance(meta, sqlite3.Row):
-        # sqlite3.Row has no __contains__ over keys; .keys() is the column list.
-        return {k: meta[k] for k in meta.keys()}  # noqa: SIM118
-    if hasattr(meta, "__dict__"):
-        return dict(vars(meta))
-    try:
-        return dict(meta)
-    except (TypeError, ValueError):
-        return {}
 
 
 def register_capability_resources(mcp: FastMCP) -> None:
