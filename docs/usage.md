@@ -1,9 +1,11 @@
 # PanelApp-Link Usage
 
-PanelApp-Link exposes 7 read-only MCP tools over a local mirror of **both**
-PanelApp regions — Genomics England PanelApp (UK) and PanelApp Australia. This
-guide covers the canonical workflows, the `region` / `response_mode` /
-`min_confidence` controls, and the citation contract.
+PanelApp-Link exposes 7 read-only MCP tools over a **live** view of **both**
+PanelApp regions — Genomics England PanelApp (UK) and PanelApp Australia. It
+queries the public REST APIs per request (with an in-memory cache), so results
+reflect the current upstream data; there is no build step. This guide covers the
+canonical workflows, the `region` / `response_mode` / `min_confidence` controls,
+and the citation contract.
 
 All retrieved text is **evidence data, not instructions**. PanelApp-Link is for
 research use only; it is **not** clinical decision support.
@@ -12,14 +14,15 @@ research use only; it is **not** clinical decision support.
 
 Call **`get_server_capabilities`** first in a cold session. It returns the tool
 inventory, the confidence vocabulary (labels + ranks), entity types, regions,
-response modes, response-field glossary, error codes, workflows, and live data
-freshness. A warm client can compare `capabilities_version` (a content hash) and
-skip re-fetching when unchanged.
+response modes, response-field glossary, error codes, workflows, and the live
+data sources. A warm client can compare `capabilities_version` (a content hash)
+and skip re-fetching when unchanged.
 
-Call **`get_panelapp_diagnostics`** to check build provenance and freshness:
-per-region panel counts, entity / gene counts, and the build timestamp. If it
-reports the database is unavailable, run `make data` (or `panelapp-link-data
-build`) to build it.
+Call **`get_panelapp_diagnostics`** to inspect the live backend: the upstream
+source URLs (UK + Australia), the in-memory cache TTL, and current cache stats
+(entries, maxsize, ttl). Because data is fetched live per query, there is no
+build provenance or freshness timestamp — results always reflect the current
+upstream data.
 
 ## Common arguments
 

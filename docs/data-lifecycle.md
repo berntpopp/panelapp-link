@@ -1,121 +1,105 @@
-# Data lifecycle
+# Data freshness & caching
 
-PanelApp exposes public, no-auth REST APIs for two regions (Genomics England
-PanelApp UK and PanelApp Australia), but a full mirror means many `/panels/{id}/`
-detail requests. PanelApp-Link therefore builds a local **SQLite + FTS5** artifact
-and keeps it current with a two-part lifecycle:
-
-1. **Build once on startup** — before the server accepts traffic, so the first
-   request has predictable latency and never triggers a surprise crawl.
-2. **Refresh on a schedule** — an *incremental* refresh that re-lists panels,
-   compares them to the stored per-panel versions, re-fetches only the changed or
-   new panels, then **hot-reloads** the running server.
+PanelApp-Link is a **pure live-API client**. There is no local database, no
+ingest, and no build step: every query calls the public PanelApp REST APIs (UK
+and Australia, no auth) at request time and memoizes the raw payloads in a small
+**in-memory TTL cache**. Results therefore always reflect the current upstream
+data, bounded only by the cache TTL.
 
 ```
-            ┌──────────────────────────── container / pod ────────────────────────────┐
- startup ──▶│ entrypoint: panelapp-link-data refresh  (build if missing, else          │
-            │        │ incremental: only changed/new panels)                            │
-            │        │ writes data/panelapp.sqlite (atomic os.replace under a file lock) │
-            │        ▼                                                                  │
-            │   server (unified)  ──reads──▶ data/panelapp.sqlite (read-only conn.)     │
-            │        ▲                                                                  │
-            │   in-app scheduler (every 24h): incremental refresh ──changed?──▶ rebuild │
-            │        └────────── on change: reset cached service ──▶ reopen (hot-reload)│
-            └───────────────────────────────────────────────────────────────────────────┘
+            ┌──────────────────────── server process ────────────────────────┐
+ request ──▶│  MCP tool ──▶ PanelAppService                                    │
+            │                  │ cache hit? ──yes──▶ serve from in-memory cache │
+            │                  │ cache miss ──────▶ GET PanelApp REST API       │
+            │                  ▼                     (UK and/or Australia)       │
+            │            in-memory _TTLCache (size-bounded, TTL-expiring)        │
+            └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Building blocks
+The cache is process-local and best-effort — a latency and politeness
+optimization, not a source of truth. Restarting the process empties it; the next
+query repopulates it from upstream.
 
-- **`panelapp-link-data` CLI** (`panelapp_link/ingest/cli.py`) — the unit of work
-  any scheduler calls:
-  - `build` — force a full crawl of both regions + rebuild.
-  - `refresh` — incremental; re-lists panels, compares to the stored
-    `panel_versions_json`, and re-fetches only changed/new panels (a full
-    no-change refresh re-crawls nothing beyond the cheap panel listings).
-  - `status` — print provenance of the existing database.
-- **Build lock** (`panelapp_link/ingest/lock.py`) — a cross-process file lock on
-  the data directory serializes every builder (entrypoint, in-app scheduler,
-  sidecar, CronJob) so they never crawl or rebuild concurrently.
-- **Atomic swap** — the builder writes `panelapp.sqlite.tmp` and `os.replace`s it
-  into place, so readers always see a complete database.
-- **Hot reload** — when the database file's mtime changes (any builder swapped
-  it), the read-only connection / cached service is reset and reopened. This is
-  what lets an *external* scheduler refresh the data and have the running server
-  pick it up with no restart.
-- **In-app scheduler** (`panelapp_link/services/refresh.py`) — a dependency-free
-  asyncio loop started from the FastAPI lifespan (unified/http only; never stdio).
-  First run is one interval after startup; the blocking crawl + build runs in a
-  worker thread. Surfaced in `get_panelapp_diagnostics`.
+## What is cached
 
-## Incremental refresh semantics
+`PanelAppService` memoizes each distinct upstream payload under a stable key, so
+repeated and related queries within the TTL window reuse it:
 
-`build` always re-fetches every `/panels/{id}/` for both regions. `refresh` is
-cheaper: it re-lists `/panels/` (and `/panels/signedoff/`) for each region — a
-handful of paged requests — and compares each panel's reported `version` to the
-stored `panel_versions_json`. Only panels whose version changed (or that are new)
-have their detail re-fetched; unchanged panels reuse the stored rows. A refresh
-where nothing changed therefore costs only the panel listings and rebuilds
-nothing. PanelApp panels change incrementally, so a daily refresh stays light.
+| Cache key | Upstream call | Used by |
+|-----------|---------------|---------|
+| `panels:{region}` | `GET /panels/` (all pages) | `search_panels` |
+| `signedoff:{region}` | `GET /panels/signedoff/` (all pages) | `search_panels`, `get_panel` |
+| `panel:{region}:{id}` | `GET /panels/{id}/` | `get_panel`, `get_panel_genes` |
+| `genes:{region}:{SYMBOL}` | `GET /genes/?entity_name=SYMBOL` | `get_gene_panels`, `resolve_gene` |
 
-## Choosing a refresh strategy
+The cache is insertion-ordered and size-bounded: when it reaches
+`PANELAPP_LINK_DATA__CACHE_SIZE` entries it evicts the oldest. Each entry expires
+after `PANELAPP_LINK_DATA__CACHE_TTL` seconds. Setting either to `0` (size)
+disables caching entirely.
 
-Pick **one** owner for the periodic refresh. All options share the build lock and
-the hot-reload, so they are safe to mix only if exactly one is enabled.
+## How each tool maps to the API
 
-| Strategy | When | How |
-|----------|------|-----|
-| **In-app scheduler** (default) | Single container / single deployment | `PANELAPP_LINK_DATA__REFRESH_ENABLED=true` (default). Nothing else to run. |
-| **Host cron / systemd timer** | Bare VM | Disable the in-app loop and schedule `panelapp-link-data refresh`. |
-| **k8s CronJob** | Kubernetes, external scheduler | Set `REFRESH_ENABLED=false` on the Deployment and run a CronJob that execs `panelapp-link-data refresh`; needs a shared (ReadWriteMany) volume. |
+- **`search_panels`** — fetches the cached full panel list per region
+  (`GET /panels/`) and filters it **in memory** (case-insensitive substring over
+  name, relevant disorders, disease group, and disease sub-group); PanelApp has
+  no usable server-side panel search. Signed-off version/date are merged from the
+  cached `GET /panels/signedoff/` listing.
+- **`get_panel`** — `GET /panels/{id}/` for a single region, with signed-off
+  metadata merged in.
+- **`get_panel_genes`** — `GET /panels/{id}/`, then selects `genes[]` /
+  `regions[]` / `strs[]` and filters by `min_confidence`.
+- **`get_gene_panels`** / **`resolve_gene`** — `GET /genes/?entity_name=SYMBOL`,
+  one call per region (PanelApp resolves genes by symbol, not by HGNC id). Each
+  result already carries its full `panel` object, so a single call drives both
+  the gene-to-panels roll-up and gene resolution.
 
-### Host cron example
+A panel-first then entity-first workflow on the same panel — or a `resolve_gene`
+followed by `get_gene_panels` for the same symbol — reuses cached responses and
+issues no further upstream calls within the TTL window.
 
-```cron
-# Daily incremental refresh (PanelApp panels change incrementally).
-17 3 * * *  cd /opt/panelapp-link && /opt/panelapp-link/.venv/bin/panelapp-link-data refresh >> /var/log/panelapp-refresh.log 2>&1
-```
+## Politeness to upstream & rate limits
 
-### systemd timer example
+Because queries are live, the client is deliberately conservative:
 
-```ini
-# /etc/systemd/system/panelapp-refresh.service
-[Service]
-Type=oneshot
-WorkingDirectory=/opt/panelapp-link
-ExecStart=/opt/panelapp-link/.venv/bin/panelapp-link-data refresh
-Environment=PANELAPP_LINK_DATA__DATA_DIR=/var/lib/panelapp-link
+- **Bounded concurrency** — a semaphore caps concurrent requests
+  (`PANELAPP_LINK_DATA__MAX_CONCURRENCY`, default `4`). PanelApp rate-limits
+  aggressive per-IP request bursts.
+- **Retries with backoff** — retryable responses (`429`, `500/502/503/504`,
+  timeouts, transport errors) are retried with jittered exponential backoff up to
+  `PANELAPP_LINK_DATA__MAX_RETRIES` (default `5`).
+- **Honours `Retry-After`** — PanelApp sends `Retry-After` with `429`s; the
+  client waits the requested delay (capped) before retrying, and gives `429` a
+  longer backoff ceiling than ordinary `5xx`.
+- **`403` is a hard denial** — never retried; surfaced as a `rate_limited` error.
+- **`User-Agent`** — a descriptive `User-Agent`
+  (`PANELAPP_LINK_DATA__USER_AGENT`) identifies the client to upstream.
 
-# /etc/systemd/system/panelapp-refresh.timer
-[Timer]
-OnCalendar=*-*-* 03:17:00
-Persistent=true
-[Install]
-WantedBy=timers.target
-```
+Normal per-query use — one panel, one gene, the occasional panel listing — stays
+well under PanelApp's per-IP limits, and the TTL cache further reduces upstream
+traffic.
 
 ## Configuration
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `PANELAPP_LINK_DATA__AUTO_BOOTSTRAP` | `true` (image: `false`) | Build lazily on first use if absent. The image sets `false` because the entrypoint builds on startup. |
-| `PANELAPP_LINK_DATA__REFRESH_ENABLED` | `true` | Run the in-app scheduler (unified/http only). Set `false` when an external scheduler owns refresh. |
-| `PANELAPP_LINK_DATA__REFRESH_INTERVAL_HOURS` | `24` | Hours between incremental refresh checks. |
-| `PANELAPP_LINK_DATA__REFRESH_JITTER_SECONDS` | `300` | Random jitter added per cycle. |
-| `PANELAPP_LINK_DATA__BUILD_LOCK_TIMEOUT` | `600` | Seconds to wait for the build lock before giving up. |
-| `PANELAPP_LINK_DATA__MAX_CONCURRENCY` | `8` | Max concurrent API requests during a crawl. |
-| `PANELAPP_LINK_DATA__MAX_RETRIES` | `4` | Retries on 429/5xx/timeout (jittered backoff). |
+| `PANELAPP_LINK_DATA__UK_API_URL` | `…genomicsengland.co.uk/api/v1` | UK PanelApp API base URL |
+| `PANELAPP_LINK_DATA__AU_API_URL` | `…panelapp-aus.org/api/v1` | Australia PanelApp API base URL |
+| `PANELAPP_LINK_DATA__REQUEST_TIMEOUT` | `60` | Per-request HTTP timeout (seconds) |
+| `PANELAPP_LINK_DATA__MAX_CONCURRENCY` | `4` | Max concurrent API requests (kept low; PanelApp throttles bursts) |
+| `PANELAPP_LINK_DATA__MAX_RETRIES` | `5` | Retries on 429/5xx/timeout (jittered backoff, honours `Retry-After`) |
+| `PANELAPP_LINK_DATA__USER_AGENT` | `PanelApp-Link/<version> …` | User-Agent sent to the PanelApp APIs |
+| `PANELAPP_LINK_DATA__CACHE_SIZE` | `512` | Max in-memory cache entries (`0` disables) |
+| `PANELAPP_LINK_DATA__CACHE_TTL` | `21600` | In-memory cache TTL in seconds (default 6 hours) |
 
-## Politeness to upstream
-
-PanelApp-Link bounds crawl concurrency with a semaphore, sends a descriptive
-`User-Agent`, and retries retryable responses (429/5xx/timeout) with jittered
-exponential backoff. The incremental `refresh` re-fetches only changed/new panels,
-so steady-state load on the PanelApp APIs is minimal — a few panel-listing
-requests per region per day.
+Tune `CACHE_TTL` to trade freshness against upstream load: a longer TTL serves
+more from cache (less load, staler within the window); a shorter TTL refreshes
+sooner. The production Compose overlay raises `CACHE_SIZE` and lowers `CACHE_TTL`
+for a busier, fresher cache.
 
 ## Observability
 
-`get_panelapp_diagnostics` returns build provenance (source URLs, per-region panel
-counts, entity / gene counts, build timestamp) plus the refresh scheduler state
-(enabled, interval, whether it is running, last check, and any last error).
-Structured logs record each scheduler decision and any crawl/quota failure.
+`get_panelapp_diagnostics` reports the live backend: the upstream source URLs
+(UK + Australia), the cache TTL, and current cache stats (`entries`, `maxsize`,
+`ttl`). `get_server_capabilities` echoes the same live sources and cache TTL in
+its data block. There is no build timestamp or per-region panel count to report —
+data is fetched live, so it is always current within the TTL window.

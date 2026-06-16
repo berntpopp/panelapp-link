@@ -1,5 +1,5 @@
 {
-  "_comment": "Add this block to claude_desktop_config.json (mcpServers). Replace the path. The stdio entry point crawls both PanelApp regions and builds the local SQLite database on first start.",
+  "_comment": "Add this block to claude_desktop_config.json (mcpServers). Replace the path. The stdio entry point is a live PanelApp API client with an in-memory cache; it needs no data directory or build step.",
   "mcpServers": {
     "panelapp-link": {
       "command": "uv",
@@ -8,10 +8,7 @@
         "/absolute/path/to/panelapp-link",
         "run",
         "panelapp-link-mcp"
-      ],
-      "env": {
-        "PANELAPP_LINK_DATA__DATA_DIR": "/absolute/path/to/panelapp-link/data"
-      }
+      ]
     }
   }
 }

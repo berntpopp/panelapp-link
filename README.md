@@ -1,9 +1,9 @@
 # PanelApp-Link
 
 MCP + FastAPI server that grounds **gene-panel** questions in **PanelApp** —
-mirroring **both** Genomics England PanelApp (UK) and PanelApp Australia into a
-local read-only SQLite database and answering panel/gene questions across either
-or both regions.
+a **pure live-API client** over **both** Genomics England PanelApp (UK) and
+PanelApp Australia that answers panel/gene questions across either or both
+regions, querying the public REST APIs per request with an in-memory cache.
 
 A drop-in sibling of the `*-link` MCP fleet (e.g. `gencc-link`, `hgnc-link`).
 
@@ -23,8 +23,9 @@ A drop-in sibling of the `*-link` MCP fleet (e.g. `gencc-link`, `hgnc-link`).
   signed-off endpoint.
 - **Cross-region gene roll-up** — fast gene-to-panels lookups aggregated across
   both regions (panel count, regions present, max confidence).
-- **Local SQLite + FTS5 store** built by an async crawl of the public PanelApp
-  REST APIs — fast, deterministic, no upstream API at query time.
+- **Pure live-API client, no database** — queries the public PanelApp REST APIs
+  per request and memoizes raw payloads in an in-memory TTL cache (default 6h),
+  so the server is stateless: no SQLite mirror, no ingest, no build step.
 - **7 MCP tools** with token-efficient `response_mode` shaping, typed
   `outputSchema`, plain-English headlines, and ready-to-call
   `_meta.next_commands` chains — on success **and** error envelopes, so recovery
@@ -32,15 +33,16 @@ A drop-in sibling of the `*-link` MCP fleet (e.g. `gencc-link`, `hgnc-link`).
 - **Confidence filtering** — `min_confidence` filters by traffic-light rank
   (green = only green; amber = amber + green; red = all).
 - **Observability** — every `_meta` carries `request_id` + `elapsed_ms`;
-  `get_panelapp_diagnostics` reports build provenance and per-region freshness.
+  `get_panelapp_diagnostics` reports the live sources, cache TTL, and cache stats.
 - **Three transports** from one codebase: `unified` (REST + MCP), `http`, `stdio`.
 - **Agent-discoverable** — `panelapp://` capabilities, usage, reference, license,
   citation, and research-use resources; typed error envelopes.
 
 ## Data sources & license
 
-PanelApp exposes public, no-auth REST APIs for two regions; PanelApp-Link crawls
-both at ingest time and serves a local mirror.
+PanelApp exposes public, no-auth REST APIs for two regions; PanelApp-Link queries
+both live, per request, with an in-memory cache — always serving the current
+upstream data.
 
 - **Sources:**
   - Genomics England PanelApp (UK) —
@@ -63,9 +65,6 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install project and dev dependencies
 uv sync
 
-# Crawl both PanelApp regions and build the local SQLite database
-make data            # == panelapp-link-data build
-
 # Start the unified REST + MCP server on http://127.0.0.1:8000
 make dev
 
@@ -73,18 +72,9 @@ make dev
 make mcp-serve
 ```
 
-The database is built into `<repo>/data/panelapp.sqlite` by default. With
-`PANELAPP_LINK_DATA__AUTO_BOOTSTRAP=true` (the default), the HTTP / unified server
-also builds the database on first use if it is absent, so `make data` is optional
-but recommended for a predictable first boot.
-
-Database management commands:
-
-```bash
-make data          # panelapp-link-data build   — force full crawl + rebuild
-make data-refresh  # panelapp-link-data refresh — incremental: only changed/new panels
-make data-status   # panelapp-link-data status  — print build provenance
-```
+There is **no build step**. The server is a pure live-API client: it queries the
+public PanelApp REST APIs on demand and caches raw payloads in memory (6h TTL by
+default), so it is ready to serve as soon as it starts.
 
 ## Connecting Claude Code & Claude Desktop
 
@@ -113,7 +103,7 @@ claude mcp add --transport http panelapp-link http://127.0.0.1:8000/mcp
 ### Claude Desktop (stdio)
 
 Run the stdio server from a checkout with `uv` (no install step). The stdio entry
-point crawls both regions and builds the local database on first start. See
+point is a live-API client and needs no data directory or build step. See
 [`claude-desktop-config.json`](claude-desktop-config.json) for a ready-to-paste
 block.
 
@@ -122,10 +112,7 @@ block.
   "mcpServers": {
     "panelapp-link": {
       "command": "uv",
-      "args": ["--directory", "/absolute/path/to/panelapp-link", "run", "panelapp-link-mcp"],
-      "env": {
-        "PANELAPP_LINK_DATA__DATA_DIR": "/absolute/path/to/panelapp-link/data"
-      }
+      "args": ["--directory", "/absolute/path/to/panelapp-link", "run", "panelapp-link-mcp"]
     }
   }
 }
@@ -135,13 +122,13 @@ block.
 
 | Tool | Purpose |
 |------|---------|
-| `search_panels` | Ranked panel search (FTS over name / disorders / disease group) across regions |
+| `search_panels` | Panel search (in-memory filter over name / disorders / disease group) across regions |
 | `get_panel` | One panel's detail (`region` `uk`\|`australia`) + entity-count breakdown |
 | `get_panel_genes` | A panel's entities (`entity_type` gene\|region\|str), filterable by `min_confidence` |
 | `get_gene_panels` | All panels a gene appears on, across regions, grouped/sorted by confidence |
 | `resolve_gene` | Resolve a symbol / HGNC id / free text to a gene (+ `matches[]` if ambiguous) |
-| `get_server_capabilities` | Tool inventory, confidence vocab, entity types, regions, response modes, data freshness |
-| `get_panelapp_diagnostics` | Build provenance + per-region panel counts and freshness |
+| `get_server_capabilities` | Tool inventory, confidence vocab, entity types, regions, response modes, live sources |
+| `get_panelapp_diagnostics` | Live sources, cache TTL, and in-memory cache stats |
 
 Tools whose payloads vary accept `response_mode`: `minimal` | `compact`
 (default) | `standard` | `full`, and the data tools accept `region`
@@ -150,19 +137,21 @@ canonical workflows and the citation contract.
 
 ## Architecture
 
-PanelApp publishes public, slow-changing REST data for two regions, so
-PanelApp-Link crawls both once into a local **SQLite + FTS5** artifact and queries
-it in-process — no upstream client, rate limiting, or caching against the live
-APIs at query time.
+PanelApp-Link is a **pure live-API client**. Each query calls the public PanelApp
+REST APIs (1-2 calls per region) and memoizes the raw payloads in a small
+in-memory **TTL cache** (default 6h), so repeated and related queries within the
+window do not re-hit upstream. There is no database, no ingest, and no build step;
+the server is stateless.
 
 ```
-ingest (crawl UK + AU -> merge signed-off -> build) -> SQLite + FTS5 store
-  -> repository (read-only) -> service (search / panels / genes / roll-ups)
-  -> MCP tools  +  FastAPI (/health, /, /docs)
+PanelApp UK + AU REST APIs (no auth)
+  -> async REST client (concurrency cap, jittered backoff, honours Retry-After)
+  -> service (per-query fetch + in-memory TTL cache; search filters in memory)
+  -> MCP tools / envelope  +  FastAPI (/health, /, /docs)
   -> transports: unified | http | stdio
 ```
 
-Full details, the ingest crawl, the signed-off merge, and an ASCII diagram are in
+Full details, the per-tool API mapping, the cache, and an ASCII diagram are in
 [`docs/architecture.md`](docs/architecture.md).
 
 ## Configuration
@@ -181,21 +170,15 @@ config uses a double underscore) and an optional `.env` file. Copy
 | `PANELAPP_LINK_LOG_FORMAT` | `console` | `console` or `json` |
 | `PANELAPP_LINK_DATA__UK_API_URL` | `…genomicsengland.co.uk/api/v1` | UK PanelApp API base |
 | `PANELAPP_LINK_DATA__AU_API_URL` | `…panelapp-aus.org/api/v1` | Australia PanelApp API base |
-| `PANELAPP_LINK_DATA__DATA_DIR` | `<repo>/data` | Directory for the built database |
-| `PANELAPP_LINK_DATA__DB_FILENAME` | `panelapp.sqlite` | SQLite filename in the data dir |
 | `PANELAPP_LINK_DATA__REQUEST_TIMEOUT` | `60` | Per-request HTTP timeout (seconds) |
-| `PANELAPP_LINK_DATA__MAX_CONCURRENCY` | `8` | Max concurrent crawl requests |
-| `PANELAPP_LINK_DATA__MAX_RETRIES` | `4` | Retries on 429/5xx/timeout |
-| `PANELAPP_LINK_DATA__AUTO_BOOTSTRAP` | `true` (image: `false`) | Build the database lazily on first use if absent |
-| `PANELAPP_LINK_DATA__REFRESH_ENABLED` | `true` | Run the in-app conditional-refresh scheduler (unified/http only) |
-| `PANELAPP_LINK_DATA__REFRESH_INTERVAL_HOURS` | `24` | Hours between conditional refresh checks |
-| `PANELAPP_LINK_DATA__REFRESH_JITTER_SECONDS` | `300` | Random jitter added to each refresh |
-| `PANELAPP_LINK_DATA__BUILD_LOCK_TIMEOUT` | `600` | Seconds to wait for the cross-process build lock |
-| `PANELAPP_LINK_DATA__CACHE_SIZE` | `512` | Query cache entries (0 disables) |
-| `PANELAPP_LINK_DATA__CACHE_TTL` | `3600` | Query cache TTL (seconds) |
+| `PANELAPP_LINK_DATA__MAX_CONCURRENCY` | `4` | Max concurrent API requests (kept low; PanelApp rate-limits bursts) |
+| `PANELAPP_LINK_DATA__MAX_RETRIES` | `5` | Retries on 429/5xx/timeout (honours `Retry-After`) |
+| `PANELAPP_LINK_DATA__USER_AGENT` | `PanelApp-Link/<version> …` | User-Agent sent to the PanelApp APIs |
+| `PANELAPP_LINK_DATA__CACHE_SIZE` | `512` | In-memory cache entries (0 disables) |
+| `PANELAPP_LINK_DATA__CACHE_TTL` | `21600` | In-memory cache TTL in seconds (default 6h) |
 
-See [`docs/data-lifecycle.md`](docs/data-lifecycle.md) for how the database is
-built on startup and refreshed on a schedule.
+See [`docs/data-lifecycle.md`](docs/data-lifecycle.md) for data freshness, caching,
+and how each tool maps to the live API endpoints.
 
 ## Development
 
@@ -217,20 +200,17 @@ follow `AGENTS.md`; Claude Code also loads the lean `CLAUDE.md`.
 
 ## Docker deployment
 
+The image is **stateless** — a pure live-API client with no database and no
+volume, so the container serves traffic almost immediately:
+
 ```bash
-make docker-build           # build the image
-make docker-up              # start the unified server on host port 8000
+docker compose -f docker/docker-compose.yml up -d
 curl http://localhost:8000/health
-make docker-logs
-make docker-down
 ```
 
-The container's **entrypoint crawls both regions and builds the database once on
-startup** (before the server accepts traffic), and an **in-app scheduler**
-conditionally refreshes it every 24h — re-listing panels and re-fetching only the
-changed/new ones — and hot-reloads the running server, so first-request latency is
-predictable. The built database lives in the `panelapp-data` named volume at
-`/app/data` and persists across restarts.
+The host port defaults to `8000`; override it with `PANELAPP_LINK_HOST_PORT`
+(e.g. `PANELAPP_LINK_HOST_PORT=9000 docker compose -f docker/docker-compose.yml
+up -d`). The image sets a 6h cache TTL (`PANELAPP_LINK_DATA__CACHE_TTL=21600`).
 
 For production, layer the prod overlay (no published ports, security hardening,
 resource limits):
@@ -239,7 +219,7 @@ resource limits):
 docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml up -d
 ```
 
-The full strategy and all scheduling options are documented in
+Data freshness and caching are documented in
 [`docs/data-lifecycle.md`](docs/data-lifecycle.md).
 
 ## License & citation

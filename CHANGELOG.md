@@ -5,6 +5,37 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - Unreleased
+
+### Changed
+
+- **Switched to a pure live-API backend.** PanelApp-Link now queries the public
+  Genomics England (UK) and PanelApp Australia REST APIs **per request** and
+  memoizes raw payloads in an in-memory TTL cache (default 6h,
+  `PANELAPP_LINK_DATA__CACHE_TTL=21600`). The server is stateless: no local
+  database, no data directory, no volume, and no build step. Politeness is tuned
+  for live use — low concurrency (default 4), jittered backoff, and `Retry-After`
+  handling for PanelApp's HTTP 429 throttling.
+- **Tool-to-API mapping.** `get_gene_panels` / `resolve_gene` →
+  `GET /genes/?entity_name=SYMBOL` (one call per region); `get_panel` /
+  `get_panel_genes` → `GET /panels/{id}/`; `search_panels` fetches the cached
+  panel list and filters in memory; signed-off status comes from the cached
+  `GET /panels/signedoff/`. The 7-tool surface and arguments are unchanged.
+- **Diagnostics & capabilities** now report the live sources and cache state
+  (TTL, entries) instead of build provenance and per-region freshness timestamps.
+
+### Removed
+
+- **The SQLite mirror, the `ingest/` crawler, the `data/` store (schema + read-only
+  repository), and the in-app refresh scheduler.** Data is no longer mirrored
+  locally.
+- **The `panelapp-link-data` CLI** (`build` / `refresh` / `status`) and its
+  `make data*` targets — there is no build step to run.
+- **Data/store/refresh config:** `data_dir`, `db_filename`, `auto_bootstrap`,
+  `refresh_enabled`, `refresh_interval_hours`, `refresh_jitter_seconds`,
+  `build_lock_timeout`. The `data_unavailable` error code is gone (no database to
+  be unavailable).
+
 ## [0.1.0] - 2026-06-16
 
 Initial release. PanelApp-Link is a read-only MCP + FastAPI server that mirrors
