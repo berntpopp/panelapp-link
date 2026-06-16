@@ -1,0 +1,3 @@
+# Per-file line-count ceilings that exceed the 600-line default budget enforced
+# by scripts/check_file_size.py. Format: <path-relative-to-repo-root>:<ceiling>
+# Keep this empty; prefer splitting modules over grandfathering them.

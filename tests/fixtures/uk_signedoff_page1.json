@@ -1,0 +1,132 @@
+{
+ "count": 297,
+ "next": null,
+ "previous": null,
+ "results": [
+  {
+   "id": 3,
+   "name": "Stickler syndrome",
+   "stats": {
+    "number_of_strs": 0,
+    "number_of_genes": 11,
+    "number_of_regions": 0
+   },
+   "types": [
+    {
+     "name": "Rare Disease 100K",
+     "slug": "rare-disease-100k",
+     "description": "Rare Disease 100K"
+    },
+    {
+     "name": "GMS Rare Disease Virtual",
+     "slug": "gms-rare-disease-virtual",
+     "description": "This is a panel for the Genomic Medicine Service for an exome/genome/panel based test that requires a virtual gene panel for rare disease in the Test Directory."
+    },
+    {
+     "name": "GMS Rare Disease",
+     "slug": "gms-rare-disease",
+     "description": "This panel type is used for GMS panels that are not virtual (i.e. could be a wet lab test)"
+    },
+    {
+     "name": "GMS signed-off",
+     "slug": "gms-signed-off",
+     "description": "This panel has undergone review by a NHSE GMS disease specialist group and processes to be signed-off for use within the GMS."
+    }
+   ],
+   "status": "public",
+   "hash_id": "554a0ac9bb5a167e4ccd1ec1",
+   "version": "4.0",
+   "disease_group": "Skeletal disorders",
+   "version_created": "2023-03-22T15:38:28.046827Z",
+   "disease_sub_group": "Skeletal dysplasias",
+   "relevant_disorders": [
+    "R45"
+   ],
+   "signed_off": "2023-03-22"
+  },
+  {
+   "id": 9,
+   "name": "Differences in sex development",
+   "stats": {
+    "number_of_strs": 0,
+    "number_of_genes": 69,
+    "number_of_regions": 2
+   },
+   "types": [
+    {
+     "name": "Rare Disease 100K",
+     "slug": "rare-disease-100k",
+     "description": "Rare Disease 100K"
+    },
+    {
+     "name": "GMS Rare Disease Virtual",
+     "slug": "gms-rare-disease-virtual",
+     "description": "This is a panel for the Genomic Medicine Service for an exome/genome/panel based test that requires a virtual gene panel for rare disease in the Test Directory."
+    },
+    {
+     "name": "GMS Rare Disease",
+     "slug": "gms-rare-disease",
+     "description": "This panel type is used for GMS panels that are not virtual (i.e. could be a wet lab test)"
+    },
+    {
+     "name": "GMS signed-off",
+     "slug": "gms-signed-off",
+     "description": "This panel has undergone review by a NHSE GMS disease specialist group and processes to be signed-off for use within the GMS."
+    }
+   ],
+   "status": "public",
+   "hash_id": "569380ac22c1fc251660faf8",
+   "version": "4.20",
+   "disease_group": "Endocrinology",
+   "version_created": "2026-04-07T09:26:14.010167Z",
+   "disease_sub_group": "",
+   "relevant_disorders": [
+    "R146",
+    "Disorders of sex development"
+   ],
+   "signed_off": "2026-05-06"
+  },
+  {
+   "id": 13,
+   "name": "Brugada syndrome and cardiac sodium channel disease",
+   "stats": {
+    "number_of_strs": 0,
+    "number_of_genes": 23,
+    "number_of_regions": 0
+   },
+   "types": [
+    {
+     "name": "Rare Disease 100K",
+     "slug": "rare-disease-100k",
+     "description": "Rare Disease 100K"
+    },
+    {
+     "name": "GMS Rare Disease",
+     "slug": "gms-rare-disease",
+     "description": "This panel type is used for GMS panels that are not virtual (i.e. could be a wet lab test)"
+    },
+    {
+     "name": "Component Of Super Panel",
+     "slug": "component-of-super-panel",
+     "description": "This panel is a component of a Super Panel"
+    },
+    {
+     "name": "GMS signed-off",
+     "slug": "gms-signed-off",
+     "description": "This panel has undergone review by a NHSE GMS disease specialist group and processes to be signed-off for use within the GMS."
+    }
+   ],
+   "status": "public",
+   "hash_id": "55a3a78122c1fc6711b0c6b5",
+   "version": "3.15",
+   "disease_group": "Cardiology",
+   "version_created": "2026-03-05T17:02:07.728145Z",
+   "disease_sub_group": "",
+   "relevant_disorders": [
+    "Brugada syndrome",
+    "R128"
+   ],
+   "signed_off": "2026-05-06"
+  }
+ ]
+}

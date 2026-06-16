@@ -1,0 +1,105 @@
+{
+ "count": 261,
+ "next": null,
+ "previous": null,
+ "results": [
+  {
+   "id": 3149,
+   "hash_id": null,
+   "name": "Achromatopsia",
+   "disease_group": "Ophthalmological disorders",
+   "disease_sub_group": "",
+   "description": "This panel contains genes that cause achromatopsia, a condition characterised by a partial or total absence of colour vision, along with additional visual problems. This panel also contains genes that cause bradyopsia.",
+   "status": "public",
+   "version": "2.0",
+   "version_created": "2026-06-07T08:35:15.755712+10:00",
+   "relevant_disorders": [
+    "Achromatopsia",
+    "HP:0011516"
+   ],
+   "stats": {
+    "number_of_genes": 8,
+    "number_of_strs": 0,
+    "number_of_regions": 0
+   },
+   "types": [
+    {
+     "name": "Royal Melbourne Hospital",
+     "slug": "royal-melbourne-hospital",
+     "description": "Royal Melbourne Hospital"
+    },
+    {
+     "name": "Rare Disease",
+     "slug": "rare-disease",
+     "description": "Rare disease panels"
+    },
+    {
+     "name": "Victorian Clinical Genetics Services",
+     "slug": "victorian-clinical-genetics-services",
+     "description": "Panel used by VCGS."
+    }
+   ],
+   "child_panel_ids": []
+  },
+  {
+   "id": 221,
+   "hash_id": null,
+   "name": "Additional findings_Adult",
+   "disease_group": "Screening",
+   "disease_sub_group": "",
+   "description": "This panel was originally developed for the Melbourne Genomics Additional findings flagship.\r\n\r\nThe framework used considered clinical actionability and public screening principles, for full publication see Martyn M et al 2019, PMID: 30776170. The genes included are associated with conditions that are adult-onset, clinically-actionable, have a known management pathway which is publicly funded in Victoria, and have a population frequency of gene variants greater than 1/100,000.\r\n\r\nThis has been updated with the 2023 ACMG V3.2 Secondary Findings list, PMID: 37347242.\r\n\r\nV1.0 was used for the Australian Genomics Acute Care additional findings study.\r\n\r\nThe panel has been updated with ClinGen Adult Actionability assertions.",
+   "status": "public",
+   "version": "3.0",
+   "version_created": "2026-06-07T08:21:05.132507+10:00",
+   "relevant_disorders": [],
+   "stats": {
+    "number_of_genes": 136,
+    "number_of_strs": 0,
+    "number_of_regions": 0
+   },
+   "types": [
+    {
+     "name": "Melbourne Genomics",
+     "slug": "melbourne-genomics",
+     "description": "Panel used by a Melbourne Genomics project."
+    },
+    {
+     "name": "Australian Genomics",
+     "slug": "australian-genomics",
+     "description": "Panel used by Australian Genomics project."
+    },
+    {
+     "name": "Royal Melbourne Hospital",
+     "slug": "royal-melbourne-hospital",
+     "description": "Royal Melbourne Hospital"
+    }
+   ],
+   "child_panel_ids": []
+  },
+  {
+   "id": 3302,
+   "hash_id": null,
+   "name": "Additional findings_Paediatric",
+   "disease_group": "Screening",
+   "disease_sub_group": "",
+   "description": "This panel is for use by the Acute Care Genomics flagship, Additional Findings sub-study.\r\n\r\nIt is based on the newborn screening list devised by the BabySeq project (PMID: 28079900):\r\nCategory A genes have been annotated Green: high penetrance childhood onset disorders, definitive evidence for gene-disease association\r\nCategory B genes have been annotated Amber: moderate penetrance/evidence, but actionable in childhood\r\nCategory C genes have been annotated Red: limited gene-disease association. These genes are not analysed.\r\n\r\nThe panel also incorporates the Paediatric Additional Findings Treatable and Untreatable panels developed by Melbourne Genomic Health Alliance for the BabyBeyond project (PMID: 31974413), and the panel used by the NC Nexus study (PMID:30851990).",
+   "status": "public",
+   "version": "1.0",
+   "version_created": "2026-06-07T08:36:30.635272+10:00",
+   "relevant_disorders": [],
+   "stats": {
+    "number_of_genes": 1425,
+    "number_of_strs": 0,
+    "number_of_regions": 0
+   },
+   "types": [
+    {
+     "name": "Australian Genomics",
+     "slug": "australian-genomics",
+     "description": "Panel used by Australian Genomics project."
+    }
+   ],
+   "child_panel_ids": []
+  }
+ ]
+}

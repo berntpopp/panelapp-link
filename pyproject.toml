@@ -1,0 +1,174 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "panelapp-link"
+version = "0.1.0"
+description = "MCP/API server for PanelApp (Genomics England UK + PanelApp Australia) gene-panel data"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "PanelApp-Link Development Team", email = "bernt.popp@charite.de" },
+]
+keywords = [
+    "panelapp", "gene-panel", "gene-disease", "clinical-genetics", "bioinformatics",
+    "mcp", "api",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Typing :: Typed",
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0,<1.0.0",
+    "uvicorn[standard]>=0.49.0,<1.0.0",
+    "pydantic>=2.11.0,<3.0.0",
+    "pydantic-settings>=2.6.0,<3.0.0",
+    "httpx>=0.28.0,<1.0.0",
+    "structlog>=24.4.0,<27.0.0",
+    "orjson>=3.10.0,<4.0.0",
+    "rich>=13.0.0,<16.0.0",
+    "typer>=0.12.0,<1.0.0",
+    "mcp[cli]>=1.27.2,<2.0.0",
+    "fastmcp>=3.2.0,<4.0.0",
+    "gunicorn>=23.0.0,<27.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0,<10.0.0",
+    "pytest-asyncio>=0.24.0,<2.0.0",
+    "pytest-cov>=6.0.0,<8.0.0",
+    "pytest-mock>=3.14.0,<4.0.0",
+    "pytest-xdist>=3.6.0,<4.0.0",
+    "respx>=0.22.0,<1.0.0",
+    "ruff>=0.8.0,<1.0.0",
+    "mypy>=1.14.0,<3.0.0",
+    "pre-commit>=4.0.0,<5.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/berntpopp/panelapp-link"
+Repository = "https://github.com/berntpopp/panelapp-link"
+"Bug Tracker" = "https://github.com/berntpopp/panelapp-link/issues"
+Changelog = "https://github.com/berntpopp/panelapp-link/blob/main/CHANGELOG.md"
+
+[project.scripts]
+panelapp-link = "server:main"
+panelapp-link-mcp = "mcp_server:main"
+panelapp-link-data = "panelapp_link.ingest.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["panelapp_link"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"server.py" = "server.py"
+"mcp_server.py" = "mcp_server.py"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+extend-select = [
+    "E", "W", "F", "I", "N", "UP", "B", "C4", "S", "T20", "SIM", "RUF",
+]
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "B008",   # FastAPI Query/Depends pattern
+    "S101",   # asserts ok in tests (also per-file-ignores)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*" = ["S101", "S104", "S110", "T20", "B011", "SIM105", "SIM108", "SIM117"]
+"scripts/**/*" = ["T20"]
+"mcp_server.py" = ["T20"]
+"panelapp_link/ingest/cli.py" = ["T20"]
+# Dynamic SQL in these modules interpolates only `?` placeholders and internal
+# column-name constants; all caller values are bound via parameters (S608 = FP).
+"panelapp_link/data/repository.py" = ["S608"]
+"panelapp_link/ingest/builder.py" = ["S608"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+exclude = [
+    ".*site-packages.*",
+    ".*/\\.venv/.*",
+    "htmlcov/.*",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "structlog.*",
+    "mcp.*",
+    "fastmcp.*",
+    "fastapi.*",
+    "pydantic.*",
+    "pydantic_settings.*",
+    "httpx.*",
+    "uvicorn.*",
+    "typer.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests that hit the live PanelApp REST API",
+    "unit: marks tests as unit tests",
+    "mcp: marks tests that test MCP functionality",
+]
+
+[tool.coverage.run]
+source = ["panelapp_link"]
+omit = ["tests/*", "*/__init__.py", "*/.venv/*"]
+
+[tool.coverage.report]
+fail_under = 85
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+    "\\.\\.\\.",
+]
+show_missing = true
+
+[tool.coverage.html]
+directory = "htmlcov"

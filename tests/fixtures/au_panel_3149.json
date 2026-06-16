@@ -1,0 +1,311 @@
+{
+ "id": 3149,
+ "hash_id": null,
+ "name": "Achromatopsia",
+ "disease_group": "Ophthalmological disorders",
+ "disease_sub_group": "",
+ "description": "This panel contains genes that cause achromatopsia, a condition characterised by a partial or total absence of colour vision, along with additional visual problems. This panel also contains genes that cause bradyopsia.",
+ "status": "public",
+ "version": "2.0",
+ "version_created": "2026-06-07T08:35:15.755712+10:00",
+ "relevant_disorders": [
+  "Achromatopsia",
+  "HP:0011516"
+ ],
+ "stats": {
+  "number_of_genes": 8,
+  "number_of_strs": 0,
+  "number_of_regions": 0
+ },
+ "types": [
+  {
+   "name": "Victorian Clinical Genetics Services",
+   "slug": "victorian-clinical-genetics-services",
+   "description": "Panel used by VCGS."
+  },
+  {
+   "name": "Royal Melbourne Hospital",
+   "slug": "royal-melbourne-hospital",
+   "description": "Royal Melbourne Hospital"
+  },
+  {
+   "name": "Rare Disease",
+   "slug": "rare-disease",
+   "description": "Rare disease panels"
+  }
+ ],
+ "child_panel_ids": [],
+ "genes": [
+  {
+   "gene_data": {
+    "alias": [
+     "ATF6A",
+     "ATP6alpha"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:791",
+    "gene_name": "activating transcription factor 6",
+    "omim_gene": [
+     "605537"
+    ],
+    "alias_name": [
+     "activating transcription factor 6 alpha"
+    ],
+    "gene_symbol": "ATF6",
+    "hgnc_symbol": "ATF6",
+    "hgnc_release": "2023-08-15",
+    "ensembl_genes": {
+     "GRch37": {
+      "87": {
+       "location": "1:161736084-161933860",
+       "ensembl_id": "ENSG00000118217"
+      }
+     },
+     "GRch38": {
+      "115": {
+       "location": "1:161766261-161977574",
+       "ensembl_id": "ENSG00000118217"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": null
+   },
+   "entity_type": "gene",
+   "entity_name": "ATF6",
+   "confidence_level": "3",
+   "penetrance": null,
+   "mode_of_pathogenicity": null,
+   "publications": [
+    "26063662",
+    "26029869"
+   ],
+   "evidence": [
+    "Expert Review Green",
+    "Expert list"
+   ],
+   "phenotypes": [
+    "Achromatopsia 7 MIM#616517"
+   ],
+   "mode_of_inheritance": "BIALLELIC, autosomal or pseudoautosomal",
+   "tags": [],
+   "transcript": null
+  },
+  {
+   "gene_data": {
+    "alias": [
+     "CCNC1",
+     "CCNCa",
+     "CNG3",
+     "CNCG3",
+     "ACHM2"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:2150",
+    "gene_name": "cyclic nucleotide gated channel subunit alpha 3",
+    "omim_gene": [
+     "600053"
+    ],
+    "alias_name": null,
+    "gene_symbol": "CNGA3",
+    "hgnc_symbol": "CNGA3",
+    "hgnc_release": "2023-01-20",
+    "ensembl_genes": {
+     "GRch37": {
+      "87": {
+       "location": "2:98962618-99015064",
+       "ensembl_id": "ENSG00000144191"
+      }
+     },
+     "GRch38": {
+      "115": {
+       "location": "2:98346188-98399797",
+       "ensembl_id": "ENSG00000144191"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": null
+   },
+   "entity_type": "gene",
+   "entity_name": "CNGA3",
+   "confidence_level": "3",
+   "penetrance": null,
+   "mode_of_pathogenicity": null,
+   "publications": [
+    "9662398",
+    "11536077",
+    "17265047"
+   ],
+   "evidence": [
+    "Expert Review Green",
+    "Expert list"
+   ],
+   "phenotypes": [
+    "Achromatopsia 2 MIM#216900"
+   ],
+   "mode_of_inheritance": "BIALLELIC, autosomal or pseudoautosomal",
+   "tags": [],
+   "transcript": null
+  },
+  {
+   "gene_data": {
+    "alias": [
+     "ACHM3",
+     "ACHM1",
+     "RMCH"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:2153",
+    "gene_name": "cyclic nucleotide gated channel subunit beta 3",
+    "omim_gene": [
+     "605080"
+    ],
+    "alias_name": null,
+    "gene_symbol": "CNGB3",
+    "hgnc_symbol": "CNGB3",
+    "hgnc_release": "2023-01-20",
+    "ensembl_genes": {
+     "GRch37": {
+      "87": {
+       "location": "8:87566205-87755903",
+       "ensembl_id": "ENSG00000170289"
+      }
+     },
+     "GRch38": {
+      "115": {
+       "location": "8:86553977-86743675",
+       "ensembl_id": "ENSG00000170289"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": null
+   },
+   "entity_type": "gene",
+   "entity_name": "CNGB3",
+   "confidence_level": "3",
+   "penetrance": null,
+   "mode_of_pathogenicity": null,
+   "publications": [
+    "17265047"
+   ],
+   "evidence": [
+    "Expert Review Green",
+    "Expert list"
+   ],
+   "phenotypes": [
+    "Achromatopsia 3 MIM#262300"
+   ],
+   "mode_of_inheritance": "BIALLELIC, autosomal or pseudoautosomal",
+   "tags": [],
+   "transcript": null
+  },
+  {
+   "gene_data": {
+    "alias": [
+     "ACHM4"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:4394",
+    "gene_name": "G protein subunit alpha transducin 2",
+    "omim_gene": [
+     "139340"
+    ],
+    "alias_name": null,
+    "gene_symbol": "GNAT2",
+    "hgnc_symbol": "GNAT2",
+    "hgnc_release": "2023-01-20",
+    "ensembl_genes": {
+     "GRch37": {
+      "87": {
+       "location": "1:110145889-110155679",
+       "ensembl_id": "ENSG00000134183"
+      }
+     },
+     "GRch38": {
+      "115": {
+       "location": "1:109601407-109619929",
+       "ensembl_id": "ENSG00000134183"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": null
+   },
+   "entity_type": "gene",
+   "entity_name": "GNAT2",
+   "confidence_level": "3",
+   "penetrance": null,
+   "mode_of_pathogenicity": null,
+   "publications": [
+    "32203983",
+    "17251445"
+   ],
+   "evidence": [
+    "Expert Review Green",
+    "Expert list"
+   ],
+   "phenotypes": [
+    "Achromatopsia 4 MIM#613856"
+   ],
+   "mode_of_inheritance": "BIALLELIC, autosomal or pseudoautosomal",
+   "tags": [],
+   "transcript": null
+  },
+  {
+   "gene_data": {
+    "alias": [
+     "PDEA2",
+     "ACHM5",
+     "COD4"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:8787",
+    "gene_name": "phosphodiesterase 6C",
+    "omim_gene": [
+     "600827"
+    ],
+    "alias_name": [
+     "Cone cGMP-specific 3',5'-cyclic phosphodiesterase subunit alpha"
+    ],
+    "gene_symbol": "PDE6C",
+    "hgnc_symbol": "PDE6C",
+    "hgnc_release": "2023-01-20",
+    "ensembl_genes": {
+     "GRch37": {
+      "87": {
+       "location": "10:95372345-95425767",
+       "ensembl_id": "ENSG00000095464"
+      }
+     },
+     "GRch38": {
+      "115": {
+       "location": "10:93612537-93666010",
+       "ensembl_id": "ENSG00000095464"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": null
+   },
+   "entity_type": "gene",
+   "entity_name": "PDE6C",
+   "confidence_level": "3",
+   "penetrance": null,
+   "mode_of_pathogenicity": null,
+   "publications": [
+    "19615668",
+    "30080950"
+   ],
+   "evidence": [
+    "Expert Review Green",
+    "Expert list"
+   ],
+   "phenotypes": [
+    "Achromatopsia-5",
+    "Cone dystrophy 4, MIM# 613093"
+   ],
+   "mode_of_inheritance": "BIALLELIC, autosomal or pseudoautosomal",
+   "tags": [],
+   "transcript": null
+  }
+ ],
+ "strs": [],
+ "regions": []
+}

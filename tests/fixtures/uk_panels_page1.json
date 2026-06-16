@@ -1,0 +1,95 @@
+{
+ "count": 434,
+ "next": null,
+ "previous": null,
+ "results": [
+  {
+   "id": 1207,
+   "hash_id": null,
+   "name": "Acute intermittent porphyria",
+   "disease_group": "Gastrohepatology",
+   "disease_sub_group": "",
+   "status": "public",
+   "version": "2.1",
+   "version_created": "2026-05-06T16:02:21.284533Z",
+   "relevant_disorders": [
+    "R169"
+   ],
+   "stats": {
+    "number_of_genes": 1,
+    "number_of_strs": 0,
+    "number_of_regions": 0
+   },
+   "types": [
+    {
+     "name": "GMS Rare Disease",
+     "slug": "gms-rare-disease",
+     "description": "This panel type is used for GMS panels that are not virtual (i.e. could be a wet lab test)"
+    },
+    {
+     "name": "GMS signed-off",
+     "slug": "gms-signed-off",
+     "description": "This panel has undergone review by a NHSE GMS disease specialist group and processes to be signed-off for use within the GMS."
+    }
+   ]
+  },
+  {
+   "id": 1141,
+   "hash_id": null,
+   "name": "Acute rhabdomyolysis",
+   "disease_group": "Neurology",
+   "disease_sub_group": "",
+   "status": "public",
+   "version": "2.10",
+   "version_created": "2026-05-01T08:38:58.882323Z",
+   "relevant_disorders": [
+    "R419"
+   ],
+   "stats": {
+    "number_of_genes": 69,
+    "number_of_strs": 0,
+    "number_of_regions": 0
+   },
+   "types": [
+    {
+     "name": "GMS Rare Disease",
+     "slug": "gms-rare-disease",
+     "description": "This panel type is used for GMS panels that are not virtual (i.e. could be a wet lab test)"
+    },
+    {
+     "name": "GMS signed-off",
+     "slug": "gms-signed-off",
+     "description": "This panel has undergone review by a NHSE GMS disease specialist group and processes to be signed-off for use within the GMS."
+    },
+    {
+     "name": "GMS Rare Disease Virtual",
+     "slug": "gms-rare-disease-virtual",
+     "description": "This is a panel for the Genomic Medicine Service for an exome/genome/panel based test that requires a virtual gene panel for rare disease in the Test Directory."
+    }
+   ]
+  },
+  {
+   "id": 399,
+   "hash_id": null,
+   "name": "Additional findings health related",
+   "disease_group": "",
+   "disease_sub_group": "",
+   "status": "public",
+   "version": "0.116",
+   "version_created": "2025-10-13T20:24:54.630497Z",
+   "relevant_disorders": [],
+   "stats": {
+    "number_of_genes": 14,
+    "number_of_strs": 0,
+    "number_of_regions": 0
+   },
+   "types": [
+    {
+     "name": "Additional Findings",
+     "slug": "additional-findings",
+     "description": "This is a gene panel that maybe used for additional findings."
+    }
+   ]
+  }
+ ]
+}

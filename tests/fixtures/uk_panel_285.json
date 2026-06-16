@@ -1,0 +1,626 @@
+{
+ "id": 285,
+ "hash_id": "558aa423bb5a16630e15b63c",
+ "name": "Intellectual disability",
+ "disease_group": "Developmental disorders",
+ "disease_sub_group": "",
+ "status": "public",
+ "version": "10.18",
+ "version_created": "2026-05-26T10:19:59.811534Z",
+ "relevant_disorders": [
+  "Coarse facial features including Coffin-Siris-like disorders",
+  "ID",
+  "Moderate",
+  "severe or profound intellectual disability",
+  "Schizophrenia plus additional features",
+  "Intellectual disability - microarray",
+  "fragile X and sequencing",
+  "Intellectual disability - microarray and sequencing",
+  "R29"
+ ],
+ "stats": {
+  "number_of_genes": 2834,
+  "number_of_strs": 15,
+  "number_of_regions": 70
+ },
+ "types": [
+  {
+   "name": "Rare Disease 100K",
+   "slug": "rare-disease-100k",
+   "description": "Rare Disease 100K"
+  },
+  {
+   "name": "GMS Rare Disease Virtual",
+   "slug": "gms-rare-disease-virtual",
+   "description": "This is a panel for the Genomic Medicine Service for an exome/genome/panel based test that requires a virtual gene panel for rare disease in the Test Directory."
+  },
+  {
+   "name": "Component Of Super Panel",
+   "slug": "component-of-super-panel",
+   "description": "This panel is a component of a Super Panel"
+  },
+  {
+   "name": "GMS signed-off",
+   "slug": "gms-signed-off",
+   "description": "This panel has undergone review by a NHSE GMS disease specialist group and processes to be signed-off for use within the GMS."
+  }
+ ],
+ "genes": [
+  {
+   "gene_data": {
+    "alias": [],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:13666",
+    "gene_name": "aladin WD repeat nucleoporin",
+    "omim_gene": [
+     "605378"
+    ],
+    "alias_name": [
+     "aladin",
+     "Allgrove, triple-A",
+     "adracalin"
+    ],
+    "gene_symbol": "AAAS",
+    "hgnc_symbol": "AAAS",
+    "hgnc_release": "2017-11-03T00:00:00",
+    "ensembl_genes": {
+     "GRch37": {
+      "82": {
+       "location": "12:53701240-53718648",
+       "ensembl_id": "ENSG00000094914"
+      }
+     },
+     "GRch38": {
+      "90": {
+       "location": "12:53307456-53324864",
+       "ensembl_id": "ENSG00000094914"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": "2000-11-08"
+   },
+   "entity_type": "gene",
+   "entity_name": "AAAS",
+   "confidence_level": "3",
+   "penetrance": "Complete",
+   "mode_of_pathogenicity": "",
+   "publications": [
+    "20931227",
+    "25529582"
+   ],
+   "evidence": [
+    "Expert Review Green",
+    "Expert Review Green",
+    "BRIDGE study SPEED NEURO Tier1 Gene"
+   ],
+   "phenotypes": [
+    "Achalasia-addisonianism-alacrimia syndrome, OMIM:231550",
+    "Triple-A syndrome, MONDO:0009279"
+   ],
+   "mode_of_inheritance": "BIALLELIC, autosomal or pseudoautosomal",
+   "tags": [],
+   "transcript": null
+  },
+  {
+   "gene_data": {
+    "alias": [
+     "CMT2N",
+     "AlaRS"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:20",
+    "gene_name": "alanyl-tRNA synthetase",
+    "omim_gene": [
+     "601065"
+    ],
+    "alias_name": [
+     "alanine tRNA ligase 1, cytoplasmic"
+    ],
+    "gene_symbol": "AARS",
+    "hgnc_symbol": "AARS",
+    "hgnc_release": "2017-11-03T00:00:00",
+    "ensembl_genes": {
+     "GRch37": {
+      "82": {
+       "location": "16:70286198-70323446",
+       "ensembl_id": "ENSG00000090861"
+      }
+     },
+     "GRch38": {
+      "90": {
+       "location": "16:70252295-70289543",
+       "ensembl_id": "ENSG00000090861"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": "1995-07-11"
+   },
+   "entity_type": "gene",
+   "entity_name": "AARS",
+   "confidence_level": "3",
+   "penetrance": "Complete",
+   "mode_of_pathogenicity": "",
+   "publications": [
+    "25817015"
+   ],
+   "evidence": [
+    "Expert Review Green"
+   ],
+   "phenotypes": [
+    "Developmental and epileptic encephalopathy 29, OMIM:616339",
+    "Developmental and epileptic encephalopathy, 29, MONDO:0014593"
+   ],
+   "mode_of_inheritance": "BIALLELIC, autosomal or pseudoautosomal",
+   "tags": [
+    "new-gene-name"
+   ],
+   "transcript": null
+  },
+  {
+   "gene_data": {
+    "alias": [
+     "LORSDH",
+     "LKRSDH"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:17366",
+    "gene_name": "aminoadipate-semialdehyde synthase",
+    "omim_gene": [
+     "605113"
+    ],
+    "alias_name": null,
+    "gene_symbol": "AASS",
+    "hgnc_symbol": "AASS",
+    "hgnc_release": "2017-11-03T00:00:00",
+    "ensembl_genes": {
+     "GRch37": {
+      "82": {
+       "location": "7:121715701-121784334",
+       "ensembl_id": "ENSG00000008311"
+      }
+     },
+     "GRch38": {
+      "90": {
+       "location": "7:122075647-122144280",
+       "ensembl_id": "ENSG00000008311"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": "2002-01-09"
+   },
+   "entity_type": "gene",
+   "entity_name": "AASS",
+   "confidence_level": "3",
+   "penetrance": "Complete",
+   "mode_of_pathogenicity": "",
+   "publications": [
+    "934735",
+    "10775527"
+   ],
+   "evidence": [
+    "Expert Review Green"
+   ],
+   "phenotypes": [
+    "Hyperlysinemia, OMIM:238700",
+    "Hyperlysinemia (disease), MONDO:0009388"
+   ],
+   "mode_of_inheritance": "BIALLELIC, autosomal or pseudoautosomal",
+   "tags": [],
+   "transcript": null
+  },
+  {
+   "gene_data": {
+    "alias": [
+     "GABAT"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:23",
+    "gene_name": "4-aminobutyrate aminotransferase",
+    "omim_gene": [
+     "137150"
+    ],
+    "alias_name": [
+     "4-aminobutyrate transaminase"
+    ],
+    "gene_symbol": "ABAT",
+    "hgnc_symbol": "ABAT",
+    "hgnc_release": "2017-11-03T00:00:00",
+    "ensembl_genes": {
+     "GRch37": {
+      "82": {
+       "location": "16:8768422-8878432",
+       "ensembl_id": "ENSG00000183044"
+      }
+     },
+     "GRch38": {
+      "90": {
+       "location": "16:8674565-8784575",
+       "ensembl_id": "ENSG00000183044"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": "1996-03-13"
+   },
+   "entity_type": "gene",
+   "entity_name": "ABAT",
+   "confidence_level": "3",
+   "penetrance": "Complete",
+   "mode_of_pathogenicity": "",
+   "publications": [
+    "27596361",
+    "28411234",
+    "29517884",
+    "29631977",
+    "27903293"
+   ],
+   "evidence": [
+    "Expert Review Green",
+    "BRIDGE study SPEED NEURO Tier1 Gene"
+   ],
+   "phenotypes": [
+    "GABA-transaminase deficiency, 613163",
+    "developmental delay"
+   ],
+   "mode_of_inheritance": "BIALLELIC, autosomal or pseudoautosomal",
+   "tags": [],
+   "transcript": null
+  },
+  {
+   "gene_data": {
+    "alias": [],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:32",
+    "gene_name": "ATP binding cassette subfamily A member 2",
+    "omim_gene": [
+     "600047"
+    ],
+    "alias_name": null,
+    "gene_symbol": "ABCA2",
+    "hgnc_symbol": "ABCA2",
+    "hgnc_release": "2017-11-03",
+    "ensembl_genes": {
+     "GRch37": {
+      "82": {
+       "location": "9:139901686-139923367",
+       "ensembl_id": "ENSG00000107331"
+      }
+     },
+     "GRch38": {
+      "90": {
+       "location": "9:137007227-137028922",
+       "ensembl_id": "ENSG00000107331"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": "1994-03-16"
+   },
+   "entity_type": "gene",
+   "entity_name": "ABCA2",
+   "confidence_level": "3",
+   "penetrance": "Complete",
+   "mode_of_pathogenicity": null,
+   "publications": [
+    "30237576",
+    "29302074",
+    "31047799"
+   ],
+   "evidence": [
+    "Expert Review Green",
+    "Literature"
+   ],
+   "phenotypes": [
+    "Intellectual developmental disorder with poor growth and with or without seizures or ataxia, OMIM:618808",
+    "Intellectual developmental disorder with poor growth and with or without seizures or ataxia, MONDO:0032930"
+   ],
+   "mode_of_inheritance": "BIALLELIC, autosomal or pseudoautosomal",
+   "tags": [],
+   "transcript": null
+  }
+ ],
+ "strs": [
+  {
+   "gene_data": {
+    "alias": [
+     "DMK",
+     "DM1PK",
+     "MDPK",
+     "MT-PK"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:2933",
+    "gene_name": "DM1 protein kinase",
+    "omim_gene": [
+     "605377"
+    ],
+    "alias_name": [
+     "dystrophia myotonica 1",
+     "DM protein kinase",
+     "myotonin protein kinase A",
+     "myotonic dystrophy associated protein kinase",
+     "thymopoietin homolog"
+    ],
+    "gene_symbol": "DMPK",
+    "hgnc_symbol": "DMPK",
+    "hgnc_release": "2017-11-03",
+    "ensembl_genes": {
+     "GRch37": {
+      "82": {
+       "location": "19:46272975-46285810",
+       "ensembl_id": "ENSG00000104936"
+      }
+     },
+     "GRch38": {
+      "90": {
+       "location": "19:45769717-45782552",
+       "ensembl_id": "ENSG00000104936"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": "1997-10-10"
+   },
+   "entity_type": "str",
+   "entity_name": "DMPK_CTG",
+   "confidence_level": "3",
+   "penetrance": null,
+   "publications": [],
+   "evidence": [
+    "Expert Review Green",
+    "NHS GMS",
+    "Expert list"
+   ],
+   "phenotypes": [
+    "Myotonic dystrophy 1, OMIM:160900"
+   ],
+   "mode_of_inheritance": "MONOALLELIC, autosomal or pseudoautosomal, NOT imprinted",
+   "repeated_sequence": "CTG",
+   "chromosome": "19",
+   "grch37_coordinates": [
+    46273463,
+    46273522
+   ],
+   "grch38_coordinates": [
+    45770205,
+    45770264
+   ],
+   "normal_repeats": 35,
+   "pathogenic_repeats": 50,
+   "tags": [
+    "STR"
+   ]
+  },
+  {
+   "gene_data": {
+    "alias": [
+     "FMRP",
+     "FRAXA",
+     "MGC87458"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:3775",
+    "gene_name": "fragile X mental retardation 1",
+    "omim_gene": [
+     "309550"
+    ],
+    "alias_name": null,
+    "gene_symbol": "FMR1",
+    "hgnc_symbol": "FMR1",
+    "hgnc_release": "2017-11-03",
+    "ensembl_genes": {
+     "GRch37": {
+      "82": {
+       "location": "X:146993469-147032645",
+       "ensembl_id": "ENSG00000102081"
+      }
+     },
+     "GRch38": {
+      "90": {
+       "location": "X:147911951-147951125",
+       "ensembl_id": "ENSG00000102081"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": "1992-01-17"
+   },
+   "entity_type": "str",
+   "entity_name": "FMR1_CGG",
+   "confidence_level": "3",
+   "penetrance": null,
+   "publications": [],
+   "evidence": [
+    "Expert Review Green",
+    "NHS GMS",
+    "Expert list"
+   ],
+   "phenotypes": [
+    "Fragile X syndrome, OMIM:300624",
+    "Fragile X tremor/ataxia syndrome, OMIM:300623"
+   ],
+   "mode_of_inheritance": "X-LINKED: hemizygous mutation in males, monoallelic mutations in females may cause disease (may be less severe, later onset than males)",
+   "repeated_sequence": "CGG",
+   "chromosome": "X",
+   "grch37_coordinates": [
+    146993569,
+    146993628
+   ],
+   "grch38_coordinates": [
+    147912051,
+    147912110
+   ],
+   "normal_repeats": 55,
+   "pathogenic_repeats": 200,
+   "tags": [
+    "STR"
+   ]
+  },
+  {
+   "gene_data": {
+    "alias": [
+     "E46L",
+     "FLJ37990"
+    ],
+    "biotype": "protein_coding",
+    "hgnc_id": "HGNC:10549",
+    "gene_name": "ataxin 10",
+    "omim_gene": [
+     "611150"
+    ],
+    "alias_name": null,
+    "gene_symbol": "ATXN10",
+    "hgnc_symbol": "ATXN10",
+    "hgnc_release": "2017-11-03",
+    "ensembl_genes": {
+     "GRch37": {
+      "82": {
+       "location": "22:46067678-46241187",
+       "ensembl_id": "ENSG00000130638"
+      }
+     },
+     "GRch38": {
+      "90": {
+       "location": "22:45671798-45845307",
+       "ensembl_id": "ENSG00000130638"
+      }
+     }
+    },
+    "hgnc_date_symbol_changed": "2004-08-12"
+   },
+   "entity_type": "str",
+   "entity_name": "ATXN10_ATTCT",
+   "confidence_level": "2",
+   "penetrance": null,
+   "publications": [
+    "12164725"
+   ],
+   "evidence": [
+    "Expert Review Amber",
+    "NHS GMS",
+    "Expert list"
+   ],
+   "phenotypes": [
+    "Spinocerebellar ataxia 10, OMIM:603516"
+   ],
+   "mode_of_inheritance": "MONOALLELIC, autosomal or pseudoautosomal, NOT imprinted",
+   "repeated_sequence": "ATTCT",
+   "chromosome": "22",
+   "grch37_coordinates": [
+    46191235,
+    46191304
+   ],
+   "grch38_coordinates": [
+    45795355,
+    45795424
+   ],
+   "normal_repeats": 33,
+   "pathogenic_repeats": 800,
+   "tags": [
+    "STR"
+   ]
+  }
+ ],
+ "regions": [
+  {
+   "gene_data": null,
+   "entity_type": "region",
+   "entity_name": "ISCA-37390-Loss",
+   "verbose_name": "5p15 terminal (Cri du chat syndrome) region Loss",
+   "confidence_level": "3",
+   "penetrance": null,
+   "mode_of_pathogenicity": null,
+   "haploinsufficiency_score": "3",
+   "triplosensitivity_score": "",
+   "required_overlap_percentage": 60,
+   "type_of_variants": "cnv_loss",
+   "publications": [
+    "11238681",
+    "15635506"
+   ],
+   "evidence": [
+    "Expert Review Green",
+    "ClinGen"
+   ],
+   "phenotypes": [
+    "123450",
+    "PMID 15635506: characteristic cry, speech delay, facial dysmorphology, and level of mental retardation. PMID 11238681: interstitial deletions and one with a small terminal deletion confirmed the existence of two critical regions, one for dysmorphism and mental retardation in p15.2 and the other for the cat cry in p15.3. Results from one patient permitted the cat cry region to be distally narrowed from D5S13 to D5S731, study supports hypothesis of a separate region in p15.3 for the speech delay"
+   ],
+   "mode_of_inheritance": "MONOALLELIC, autosomal or pseudoautosomal, imprinted status unknown",
+   "chromosome": "5",
+   "grch37_coordinates": null,
+   "grch38_coordinates": [
+    37695,
+    11347150
+   ],
+   "tags": []
+  },
+  {
+   "gene_data": null,
+   "entity_type": "region",
+   "entity_name": "ISCA-37392-Gain",
+   "verbose_name": "7q11.23 recurrent (Williams-Beuren syndrome) region (includes ELN) Gain",
+   "confidence_level": "3",
+   "penetrance": null,
+   "mode_of_pathogenicity": null,
+   "haploinsufficiency_score": "",
+   "triplosensitivity_score": "3",
+   "required_overlap_percentage": 60,
+   "type_of_variants": "cnv_gain",
+   "publications": [
+    "26610320"
+   ],
+   "evidence": [
+    "Expert Review Green",
+    "ClinGen"
+   ],
+   "phenotypes": [
+    "intellectual disability",
+    "609757",
+    "behavior problems",
+    "abnormal gait and station",
+    "cardiovascular disease",
+    "phonologic disorders",
+    "distinctive facial features",
+    "neurologic abnormalities",
+    "speech sound disorders"
+   ],
+   "mode_of_inheritance": "MONOALLELIC, autosomal or pseudoautosomal, imprinted status unknown",
+   "chromosome": "7",
+   "grch37_coordinates": null,
+   "grch38_coordinates": [
+    73330452,
+    74728172
+   ],
+   "tags": []
+  },
+  {
+   "gene_data": null,
+   "entity_type": "region",
+   "entity_name": "ISCA-37392-Loss",
+   "verbose_name": "7q11.23 recurrent (Williams-Beuren syndrome) region (includes ELN) Loss",
+   "confidence_level": "3",
+   "penetrance": null,
+   "mode_of_pathogenicity": null,
+   "haploinsufficiency_score": "3",
+   "triplosensitivity_score": "",
+   "required_overlap_percentage": 60,
+   "type_of_variants": "cnv_loss",
+   "publications": [
+    "20301427"
+   ],
+   "evidence": [
+    "Expert Review Green",
+    "ClinGen"
+   ],
+   "phenotypes": [
+    "194050",
+    "Williams syndrome"
+   ],
+   "mode_of_inheritance": "MONOALLELIC, autosomal or pseudoautosomal, imprinted status unknown",
+   "chromosome": "7",
+   "grch37_coordinates": null,
+   "grch38_coordinates": [
+    73330452,
+    74728172
+   ],
+   "tags": []
+  }
+ ]
+}
