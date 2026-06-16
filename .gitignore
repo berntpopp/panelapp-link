@@ -14,5 +14,8 @@ build/
 data/*.sqlite
 data/*.sqlite-*
 data/*cache*.json
+data/*.lock
+data/.build.lock
+data/*.tmp
 .env
 .env.docker
