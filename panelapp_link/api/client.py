@@ -21,9 +21,24 @@ from panelapp_link.exceptions import DownloadError, RateLimitError
 if TYPE_CHECKING:
     from panelapp_link.config import PanelAppDataConfigModel
 
-_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+_RETRYABLE_STATUS = frozenset({500, 502, 503, 504})
 _BACKOFF_BASE_SECONDS = 0.5
 _BACKOFF_MAX_SECONDS = 8.0
+# 429 is retried (it is the normal back-pressure signal during a bulk crawl of
+# both regions); it gets a longer ceiling and honours ``Retry-After``. 403 is
+# treated as a hard denial and is never retried.
+_RATE_LIMIT_MAX_SECONDS = 30.0
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    """Return the ``Retry-After`` delay in seconds, if it is a plain integer."""
+    if not value:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        return None  # HTTP-date form is unsupported; fall back to backoff.
+    return seconds if seconds >= 0 else None
 
 
 class PanelAppRestClient:
@@ -53,6 +68,7 @@ class PanelAppRestClient:
         last_exc: Exception | None = None
         last_status: int | None = None
         for attempt in range(self._config.max_retries + 1):
+            retry_after: float | None = None
             try:
                 async with self._semaphore:
                     response = await self._client.get(url)
@@ -61,12 +77,17 @@ class PanelAppRestClient:
                 last_status = None
             else:
                 status = response.status_code
-                if status in (403, 429):
+                if status == 403:
                     raise RateLimitError(
-                        f"PanelApp rate limit hit (HTTP {status}) for {url}.",
-                        status_code=status,
+                        f"PanelApp denied the request (HTTP 403) for {url}.", status_code=403
                     )
-                if status in _RETRYABLE_STATUS:
+                if status == 429:
+                    last_exc = RateLimitError(
+                        f"PanelApp rate-limited the crawl (HTTP 429) for {url}.", status_code=429
+                    )
+                    last_status = 429
+                    retry_after = _parse_retry_after(response.headers.get("Retry-After"))
+                elif status in _RETRYABLE_STATUS:
                     last_exc = DownloadError(
                         f"PanelApp returned {status} for {url}.", status_code=status
                     )
@@ -78,11 +99,18 @@ class PanelAppRestClient:
                 else:
                     return response.json()  # type: ignore[no-any-return]
             if attempt < self._config.max_retries:
-                delay = min(_BACKOFF_BASE_SECONDS * (2**attempt), _BACKOFF_MAX_SECONDS)
-                await asyncio.sleep(random.uniform(0, delay))  # noqa: S311 - jitter only
+                await asyncio.sleep(self._retry_delay(attempt, last_status, retry_after))
         if last_exc is None:  # pragma: no cover - defensive; loop always sets last_exc
             last_exc = DownloadError(f"PanelApp request to {url} failed.", status_code=last_status)
         raise last_exc
+
+    @staticmethod
+    def _retry_delay(attempt: int, status: int | None, retry_after: float | None) -> float:
+        """Jittered backoff; honour ``Retry-After`` and give 429 a longer ceiling."""
+        if retry_after is not None:
+            return min(retry_after, _RATE_LIMIT_MAX_SECONDS) + random.uniform(0, 1.0)  # noqa: S311
+        cap = _RATE_LIMIT_MAX_SECONDS if status == 429 else _BACKOFF_MAX_SECONDS
+        return random.uniform(0, min(_BACKOFF_BASE_SECONDS * (2**attempt), cap))  # noqa: S311
 
     async def _list_paginated(self, url: str) -> list[dict[str, Any]]:
         """Follow DRF ``next`` links from ``url`` and return all ``results`` rows.

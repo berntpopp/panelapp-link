@@ -97,15 +97,69 @@ async def test_get_panel_returns_detail() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_429_raises_rate_limit_error() -> None:
-    """A 429 status raises RateLimitError immediately (no infinite retry)."""
-    respx.get(f"{BASE}/panels/1/").mock(return_value=httpx.Response(429))
-    client = PanelAppRestClient(_config())
+async def test_429_retried_then_rate_limit_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Repeated 429s are retried (back-pressure) then raise RateLimitError."""
+
+    async def _no_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr("panelapp_link.api.client.asyncio.sleep", _no_sleep)
+    route = respx.get(f"{BASE}/panels/1/").mock(return_value=httpx.Response(429))
+    client = PanelAppRestClient(_config(max_retries=2))
     try:
-        with pytest.raises(RateLimitError):
+        with pytest.raises(RateLimitError) as exc_info:
             await client.get_panel(BASE, 1)
     finally:
         await client.aclose()
+    assert exc_info.value.status_code == 429
+    # 1 initial attempt + 2 retries == 3 calls (429 is retried, not fatal).
+    assert route.call_count == 3
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_429_then_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A transient 429 followed by 200 succeeds after backoff."""
+
+    async def _no_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr("panelapp_link.api.client.asyncio.sleep", _no_sleep)
+    respx.get(f"{BASE}/panels/7/").mock(
+        side_effect=[httpx.Response(429), httpx.Response(200, json={"id": 7})]
+    )
+    client = PanelAppRestClient(_config(max_retries=3))
+    try:
+        detail = await client.get_panel(BASE, 7)
+    finally:
+        await client.aclose()
+    assert detail["id"] == 7
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_403_raises_immediately() -> None:
+    """A 403 is a hard denial: raised at once, never retried."""
+    route = respx.get(f"{BASE}/panels/1/").mock(return_value=httpx.Response(403))
+    client = PanelAppRestClient(_config(max_retries=3))
+    try:
+        with pytest.raises(RateLimitError) as exc_info:
+            await client.get_panel(BASE, 1)
+    finally:
+        await client.aclose()
+    assert exc_info.value.status_code == 403
+    assert route.call_count == 1
+
+
+def test_retry_delay_honours_retry_after() -> None:
+    """_retry_delay uses the Retry-After hint (capped) when present."""
+    from panelapp_link.api.client import _parse_retry_after
+
+    assert _parse_retry_after("12") == 12.0
+    assert _parse_retry_after(None) is None
+    assert _parse_retry_after("Wed, 21 Oct 2026 07:28:00 GMT") is None
+    delay = PanelAppRestClient._retry_delay(0, 429, 12.0)
+    assert 12.0 <= delay <= 13.0
 
 
 @pytest.mark.asyncio

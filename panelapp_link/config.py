@@ -46,13 +46,16 @@ class PanelAppDataConfigModel(BaseModel):
         description="HTTP timeout (seconds) for each PanelApp API request.",
     )
     max_concurrency: int = Field(
-        default=8,
+        default=4,
         ge=1,
         le=64,
-        description="Max concurrent API requests during a crawl (semaphore size).",
+        description=(
+            "Max concurrent API requests during a crawl (semaphore size). Kept "
+            "low by default because PanelApp rate-limits aggressive per-IP crawls."
+        ),
     )
     max_retries: int = Field(
-        default=4,
+        default=5,
         ge=0,
         le=10,
         description="Max retries on retryable API responses (429/5xx/timeout).",
