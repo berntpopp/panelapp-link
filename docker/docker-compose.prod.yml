@@ -1,0 +1,66 @@
+# Production docker-compose override.
+# Usage:
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml up -d
+
+services:
+  panelapp-link:
+    # Production-specific environment variables.
+    environment:
+      PANELAPP_LINK_TRANSPORT: unified
+      PANELAPP_LINK_LOG_LEVEL: INFO
+      PANELAPP_LINK_LOG_FORMAT: json
+      PANELAPP_LINK_RELOAD: "false"
+      PANELAPP_LINK_DATA__DATA_DIR: /app/data
+      PANELAPP_LINK_DATA__AUTO_BOOTSTRAP: "true"
+      PANELAPP_LINK_DATA__CACHE_SIZE: 2000
+      PANELAPP_LINK_DATA__CACHE_TTL: 7200
+
+    # No published host ports by default in production; front with a reverse proxy.
+    ports: !reset []
+
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    pids_limit: 256
+    init: true
+
+    # Unified server (FastAPI on / and MCP on /mcp via the same port).
+    command:
+      ["python", "server.py", "--transport", "unified", "--host", "0.0.0.0", "--port", "8000"]
+
+    # Production resource hints.
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+          pids: 256
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+      # Production restart policy.
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+    # Enhanced health check for production. First boot crawls both regions and
+    # builds the database, so keep a generous start period before failures count.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 210s
+
+    # Production logging with rotation.
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        labels: "service=panelapp-link,environment=production"
