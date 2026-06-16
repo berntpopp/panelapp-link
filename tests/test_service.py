@@ -225,6 +225,17 @@ async def test_resolve_gene_max_confidence(live_service: PanelAppService) -> Non
     assert out["gene"]["panel_count"] >= 1
 
 
+async def test_resolve_gene_region_scopes_lookup(live_service: PanelAppService) -> None:
+    out = await live_service.resolve_gene(gene_symbol="PKD1", region="australia")
+    assert out["gene"]["gene_symbol"] == "PKD1"
+    assert out["gene"]["regions"] == ["australia"]
+
+
+async def test_resolve_gene_invalid_region_raises(live_service: PanelAppService) -> None:
+    with pytest.raises(InvalidInputError):
+        await live_service.resolve_gene(gene_symbol="PKD1", region="mars")
+
+
 async def test_resolve_gene_missing_raises_not_found(live_service: PanelAppService) -> None:
     with pytest.raises(NotFoundError):
         await live_service.resolve_gene(gene_symbol="NOPE")

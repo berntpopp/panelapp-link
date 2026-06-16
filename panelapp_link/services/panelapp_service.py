@@ -468,13 +468,15 @@ class PanelAppService:
         query: str | None = None,
         gene_symbol: str | None = None,
         hgnc_id: str | None = None,
+        region: str = "both",
         response_mode: str = "compact",
     ) -> dict[str, Any]:
         """Resolve a symbol / free-text query to a single rolled-up gene.
 
         Returns ``{"query","gene","matches":[...]}``. PanelApp resolves by gene
         symbol; ``query`` and ``gene_symbol`` are accepted (``query`` wins when
-        ``gene_symbol`` is empty). Raises ``NotFoundError`` when nothing matches.
+        ``gene_symbol`` is empty). ``region`` (uk|australia|both) scopes the
+        lookup. Raises ``NotFoundError`` when nothing matches.
         """
         self._validate_mode(response_mode)
         symbol = (gene_symbol or "").strip() or (query or "").strip()
@@ -483,7 +485,7 @@ class PanelAppService:
                 "Provide a gene_symbol or a non-empty query (PanelApp resolves by gene symbol).",
                 field="gene_symbol",
             )
-        regions = self._normalize_region("both")
+        regions = self._normalize_region(region)
         results = await self._gather_gene_results(regions, symbol)
         if not results:
             raise NotFoundError(

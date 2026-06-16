@@ -61,6 +61,30 @@ def after_get_panel(region: str, panel_id: int) -> list[dict[str, Any]]:
     return [cmd("get_panel_genes", panel_id=panel_id, region=region)]
 
 
+def after_get_gene_panels(panels: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """After a gene's panel footprint: drill into the top panels' detail.
+
+    Emits a ``get_panel`` for each of the first distinct (region, panel) hits,
+    capped at ``_MAX_NEXT_COMMANDS``. Hits missing a concrete region/id are
+    skipped.
+    """
+    nexts: list[dict[str, Any]] = []
+    seen: set[tuple[str, int]] = set()
+    for panel in panels:
+        region = _panel_region(panel)
+        panel_id = panel.get("panel_id")
+        if region is None or panel_id is None:
+            continue
+        key = (region, int(panel_id))
+        if key in seen:
+            continue
+        seen.add(key)
+        nexts.append(cmd("get_panel", panel_id=panel_id, region=region))
+        if len(nexts) >= _MAX_NEXT_COMMANDS:
+            break
+    return nexts[:_MAX_NEXT_COMMANDS]
+
+
 def recovery_commands(
     tool: str, error_code: str, arguments: dict[str, Any], field: str | None
 ) -> list[dict[str, Any]]:

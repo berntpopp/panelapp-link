@@ -8,7 +8,7 @@ from pydantic import Field
 
 from panelapp_link.mcp.annotations import READ_ONLY_OPEN_WORLD
 from panelapp_link.mcp.envelope import McpErrorContext, run_mcp_tool
-from panelapp_link.mcp.next_commands import after_resolve_gene
+from panelapp_link.mcp.next_commands import after_get_gene_panels, after_resolve_gene
 from panelapp_link.mcp.schemas import GET_GENE_PANELS_SCHEMA, RESOLVE_GENE_SCHEMA
 from panelapp_link.mcp.service_adapters import get_panelapp_service
 from panelapp_link.models.enums import ConfidenceLabel, Region, ResponseMode
@@ -63,7 +63,7 @@ def register_gene_tools(mcp: FastMCP) -> None:
                 min_confidence=min_confidence,
                 response_mode=response_mode,
             )
-            payload["_meta"] = {"next_commands": []}
+            payload["_meta"] = {"next_commands": after_get_gene_panels(payload.get("panels", []))}
             return payload
 
         return await run_mcp_tool(
@@ -85,7 +85,8 @@ def register_gene_tools(mcp: FastMCP) -> None:
         description=(
             "Resolve free text, an approved symbol, or an HGNC CURIE to a single "
             "rolled-up PanelApp gene (symbol, hgnc id, panel count, regions, strongest "
-            "confidence). Pass one of query, gene_symbol, or hgnc_id. Returns "
+            "confidence). Pass one of query, gene_symbol, or hgnc_id. region "
+            "(uk|australia|both, default both) scopes the lookup. Returns "
             "ambiguous_query when an id maps to multiple symbols. Follow up with "
             "get_gene_panels to list the panels the gene appears on."
         ),
@@ -94,6 +95,7 @@ def register_gene_tools(mcp: FastMCP) -> None:
         query: str | None = None,
         gene_symbol: str | None = None,
         hgnc_id: str | None = None,
+        region: _REGION = "both",
         response_mode: _MODE = "compact",
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
@@ -101,6 +103,7 @@ def register_gene_tools(mcp: FastMCP) -> None:
                 query=query,
                 gene_symbol=gene_symbol,
                 hgnc_id=hgnc_id,
+                region=region,
                 response_mode=response_mode,
             )
             payload["_meta"] = {"next_commands": after_resolve_gene(payload.get("gene", {}))}

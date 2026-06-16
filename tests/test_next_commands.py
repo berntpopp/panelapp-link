@@ -18,6 +18,37 @@ class TestCmd:
         assert out["arguments"] == {"panel_id": 3, "region": "uk"}
 
 
+class TestAfterGetGenePanels:
+    def test_emits_get_panel_per_distinct_hit(self) -> None:
+        panels = [
+            {"region": "uk", "panel_id": 3, "panel_name": "A"},
+            {"region": "australia", "panel_id": 137, "panel_name": "B"},
+        ]
+        out = nc.after_get_gene_panels(panels)
+        assert out[0] == {"tool": "get_panel", "arguments": {"panel_id": 3, "region": "uk"}}
+        assert out[1] == {
+            "tool": "get_panel",
+            "arguments": {"panel_id": 137, "region": "australia"},
+        }
+
+    def test_dedupes_and_skips_invalid(self) -> None:
+        panels = [
+            {"region": "uk", "panel_id": 3},
+            {"region": "uk", "panel_id": 3},  # duplicate
+            {"region": "both", "panel_id": 9},  # non-concrete region -> skipped
+            {"region": "australia", "panel_id": None},  # no id -> skipped
+        ]
+        out = nc.after_get_gene_panels(panels)
+        assert out == [{"tool": "get_panel", "arguments": {"panel_id": 3, "region": "uk"}}]
+
+    def test_capped_at_five(self) -> None:
+        panels = [{"region": "uk", "panel_id": i} for i in range(10)]
+        assert len(nc.after_get_gene_panels(panels)) <= nc._MAX_NEXT_COMMANDS
+
+    def test_empty(self) -> None:
+        assert nc.after_get_gene_panels([]) == []
+
+
 class TestAfterSearchPanels:
     def test_emits_get_panel_then_genes(self) -> None:
         panels = [{"id": 3, "region": "uk", "name": "X"}]
