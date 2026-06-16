@@ -21,28 +21,16 @@ services:
       PANELAPP_LINK_MCP_PATH: /mcp
       PANELAPP_LINK_LOG_LEVEL: INFO
       PANELAPP_LINK_LOG_FORMAT: json
-      # Data lifecycle (see docs/data-lifecycle.md):
-      #   - the entrypoint crawls both PanelApp regions and builds the database
-      #     ONCE on startup before serving
-      #   - the in-app scheduler conditionally refreshes it every 24h
-      #     (incremental: only changed/new panels) and hot-reloads on change
-      # The named volume below keeps the SQLite database across restarts so a
-      # restart re-uses it (the entrypoint refreshes incrementally).
-      PANELAPP_LINK_DATA__DATA_DIR: /app/data
-      PANELAPP_LINK_DATA__AUTO_BOOTSTRAP: "false"
-      PANELAPP_LINK_DATA__REFRESH_ENABLED: "true"
-      PANELAPP_LINK_DATA__REFRESH_INTERVAL_HOURS: "24"
-    volumes:
-      # Persist the built SQLite database across container restarts.
-      - panelapp-data:/app/data
+      # Pure live-API client: no database, no ingest, no volume. Queries the
+      # PanelApp REST APIs per request with an in-memory cache (6h TTL).
+      PANELAPP_LINK_DATA__CACHE_TTL: "21600"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      # First boot crawls both regions and builds the database in the entrypoint
-      # before serving; allow time for the initial crawl + build.
-      start_period: 180s
+      # Stateless server: ready to serve almost immediately.
+      start_period: 15s
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -51,10 +39,6 @@ services:
         max-file: "3"
     networks:
       - panelapp-network
-
-volumes:
-  panelapp-data:
-    driver: local
 
 networks:
   panelapp-network:

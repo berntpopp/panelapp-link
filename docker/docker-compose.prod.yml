@@ -10,8 +10,6 @@ services:
       PANELAPP_LINK_LOG_LEVEL: INFO
       PANELAPP_LINK_LOG_FORMAT: json
       PANELAPP_LINK_RELOAD: "false"
-      PANELAPP_LINK_DATA__DATA_DIR: /app/data
-      PANELAPP_LINK_DATA__AUTO_BOOTSTRAP: "true"
       PANELAPP_LINK_DATA__CACHE_SIZE: 2000
       PANELAPP_LINK_DATA__CACHE_TTL: 7200
 
@@ -48,14 +46,14 @@ services:
         max_attempts: 3
         window: 120s
 
-    # Enhanced health check for production. First boot crawls both regions and
-    # builds the database, so keep a generous start period before failures count.
+    # Health check for production. The server is a stateless live-API client and
+    # is ready to serve almost immediately.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 20s
       timeout: 5s
       retries: 5
-      start_period: 210s
+      start_period: 15s
 
     # Production logging with rotation.
     logging:
