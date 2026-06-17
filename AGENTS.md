@@ -107,8 +107,20 @@ adding more behavior. Grandfather only via `.loc-allowlist`.
   - Signed-off version + date come from the cached `GET /panels/signedoff/`,
     merged into panel rows by `id`.
 - **Caching / rate limits:** raw payloads are memoized in an in-memory TTL cache
-  (default 6h). PanelApp rate-limits aggressive per-IP bursts with HTTP 429 and
-  sends `Retry-After`, which the client honours; keep concurrency low.
+  (default 6h) with **single-flight coalescing** (`services/cache.py`) so
+  concurrent identical fetches share one upstream call. PanelApp rate-limits
+  aggressive per-IP bursts with HTTP 429 and sends `Retry-After`, which the
+  client honours; keep concurrency low. Optional warm-up:
+  `PANELAPP_LINK_DATA__PREWARM=true` and `…__REFRESH_INTERVAL=<seconds>` (both
+  default off). Optional MCP throttle:
+  `PANELAPP_LINK_MCP_RATE_LIMIT_PER_MINUTE=<n>` (0 = off).
+- **Observability:** `panelapp_link/observability/` has three layers — per-call
+  `_meta` breadcrumbs (`request_id`, `elapsed_ms`, `cache`, per-region
+  `upstream`), process-wide RED metrics (Prometheus at `GET /metrics` +
+  `get_panelapp_diagnostics`), and OpenTelemetry spans (no-op until an SDK +
+  exporter is configured). The MCP envelope (`run_mcp_tool`) is the single choke
+  point that wires all three; keep new tool work flowing through it so it stays
+  instrumented.
 - **Entity types:** `gene`, `region` (CNV), and `str` (short tandem repeat).
 - **Confidence (traffic light):** `confidence_level` arrives as int or string;
   always cast to `str`. Map `"3"`/`"4"` -> green, `"2"` -> amber, `"1"`/`"0"` ->

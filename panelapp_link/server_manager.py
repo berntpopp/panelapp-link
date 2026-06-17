@@ -7,7 +7,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from panelapp_link import __version__
@@ -21,20 +21,29 @@ if TYPE_CHECKING:
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Application lifespan: no bootstrap, no scheduler (pure live backend).
+    """Application lifespan for the HTTP/unified transports.
 
-    The service is a live PanelApp API client with an in-memory cache, so startup
-    touches neither the network nor any database. On shutdown the shared REST
-    client is closed via :func:`reset_panelapp_service`.
+    The service is a live PanelApp API client with an in-memory cache. Startup
+    touches the network only when ``PANELAPP_LINK_DATA__PREWARM`` is set (off by
+    default, preserving the stateless no-boot-network posture): then the heavy
+    panel + signed-off lists are pre-fetched so the first ``search_panels`` is
+    warm. A background refresh keeps them warm when ``REFRESH_INTERVAL`` > 0. On
+    shutdown the refresh task is cancelled and the shared REST client closed.
     """
     from panelapp_link.logging_config import configure_logging
-    from panelapp_link.mcp.service_adapters import reset_panelapp_service
+    from panelapp_link.mcp.service_adapters import get_panelapp_service, reset_panelapp_service
 
     logger = configure_logging()
     logger.info("panelapp-link starting", host=settings.host, port=settings.port)
+    service = get_panelapp_service()
+    if settings.data.prewarm:
+        logger.info("prewarming panel lists")
+        await service.prewarm()
+    await service.start_background_refresh()
     try:
         yield
     finally:
+        await service.aclose()
         reset_panelapp_service()
         logger.info("panelapp-link shutting down")
 
@@ -70,6 +79,20 @@ def create_app() -> FastAPI:
         from panelapp_link.mcp.capabilities import _data_status
 
         return {"status": "ok", "version": __version__, "data": _data_status()}
+
+    @app.get("/metrics")
+    async def metrics() -> Response:
+        """Prometheus exposition of RED metrics (request rate, errors by code,
+
+        tool/upstream duration percentiles, cache hit ratio). Hand-rendered, so
+        no scrape-side dependency is required.
+        """
+        from panelapp_link.observability.metrics import get_metrics
+
+        return Response(
+            content=get_metrics().render_prometheus(),
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
 
     @app.get("/")
     async def root() -> dict[str, Any]:

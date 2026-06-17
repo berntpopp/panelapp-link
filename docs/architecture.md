@@ -30,6 +30,15 @@ request time and memoizes the raw payloads in a small in-memory **TTL cache**
   queries within the TTL window do not re-hit upstream;
 - the cache is process-local and best-effort (insertion-ordered, size-bounded,
   TTL-expiring) — it is a politeness/latency optimization, not a source of truth;
+- **single-flight coalescing** (`services/cache.py::RequestCache`) dedupes
+  concurrent identical fetches: a burst of identical lookups shares one in-flight
+  upstream call instead of stampeding the rate-limited API, so the cold
+  double-fetch (`/panels/` + `/panels/signedoff/` for both regions) is paid at
+  most once per key per TTL window;
+- optional warm-up: `PANELAPP_LINK_DATA__PREWARM=true` pre-fetches the heavy list
+  endpoints on start (HTTP/unified) so the first `search_panels` is warm, and
+  `PANELAPP_LINK_DATA__REFRESH_INTERVAL=<seconds>` keeps them warm via a
+  background task. Both default off, preserving the no-boot-network posture;
 - cross-region gene roll-ups and confidence normalization are computed on the fly
   from the live payloads.
 
@@ -59,7 +68,7 @@ well under the limit.
                                   v
   services/┌──────────────────────────────────────────────────────────┐
            │  panelapp_service.py  PanelAppService (async):            │
-           │     per-query live fetch + in-memory _TTLCache.           │
+           │     per-query live fetch + single-flight RequestCache.    │
            │     region="both" fans out to ["uk","australia"] & merges.│
            │       search_panels   -> cached /panels/ list, filter in  │
            │                          memory; merge signed-off map     │
@@ -102,8 +111,9 @@ well under the limit.
 
 2. **Service** (`panelapp_link/services/`)
    - `panelapp_service.py` — `PanelAppService`, the async business logic that all
-     tools call (never the REST client directly). It owns the in-memory
-     `_TTLCache` and a per-region base-URL map, fans `region="both"` out to both
+     tools call (never the REST client directly). It owns the single-flight
+     `RequestCache` (`services/cache.py`) and a per-region base-URL map, fans
+     `region="both"` out to both
      regions, merges results (deduped by `(region, panel_id)` for panels), filters
      by `min_confidence` rank, and pages with opaque base64 cursors. Each public
      method is `async` and returns a plain JSON-ready payload (the envelope is
@@ -202,3 +212,37 @@ gene tools aggregate a gene's presence across both regions on the fly.
 fetch failure), `rate_limited` (429/403 from PanelApp), `internal_error`. Error
 details are masked; the base `_meta` carries the research-use and license
 markers, and error envelopes still hand back recovery `next_commands`.
+
+## Observability
+
+Three cooperating layers (`panelapp_link/observability/`), so you can see the
+*system*, not just one call:
+
+- **Per-call breadcrumbs** — every envelope `_meta` carries a 12-hex `request_id`,
+  `elapsed_ms`, a `cache` label (`hit` | `miss` | `coalesced` | `partial`), and
+  per-region upstream timing (`upstream_ms` + `upstream{region:{calls,ms}}`), so
+  an agent or operator can see *why* a call took N ms. Scoped via a
+  `ContextVar` (`telemetry.py`) the cache layer writes and the envelope reads.
+- **RED metrics** (`metrics.py`) — process-wide request rate, errors by code,
+  tool + per-region upstream duration p50/p95/p99, and cache hit ratio. Exported
+  as Prometheus text at `GET /metrics` (hand-rendered, no scrape-side dependency)
+  and folded into `get_panelapp_diagnostics`.
+- **Tracing** (`tracing.py`) — OpenTelemetry spans wrap each tool call
+  (`mcp.tool/<name>`) and each upstream region fetch (`panelapp.api/<endpoint>`),
+  the latter a child of the former, so one MCP call is one trace correlated by
+  `request_id`. Instrumented with the OTel **API** (a no-op until an operator
+  configures an SDK + exporter — the standard library-instrumentation pattern).
+
+The envelope (`run_mcp_tool`) is the single choke point that opens the telemetry
+scope + trace span, records RED metrics, and folds the cache/upstream block into
+`_meta` for every tool — success or error.
+
+## Politeness & rate limiting
+
+The server is read-only over public data and ships without auth. Beyond the
+upstream-facing politeness (semaphore, jittered backoff, `Retry-After`,
+single-flight), an **opt-in** per-process token bucket
+(`PANELAPP_LINK_MCP_RATE_LIMIT_PER_MINUTE`, `mcp/rate_limit.py`) caps the MCP
+tool-call rate so one unauthenticated client cannot induce heavy UK+AU fan-out
+and trigger 429s for everyone. Over the cap a call returns a structured
+`rate_limited` envelope and never reaches upstream. Disabled by default.

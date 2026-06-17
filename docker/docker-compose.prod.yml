@@ -12,6 +12,15 @@ services:
       PANELAPP_LINK_RELOAD: "false"
       PANELAPP_LINK_DATA__CACHE_SIZE: 2000
       PANELAPP_LINK_DATA__CACHE_TTL: 7200
+      # Warm the heavy panel lists at boot + keep them warm so search_panels never
+      # pays the cold double-fetch (single worker => one shared process cache).
+      PANELAPP_LINK_DATA__PREWARM: "true"
+      PANELAPP_LINK_DATA__REFRESH_INTERVAL: "3600"
+      # Politeness guard for unauthenticated public hosting: cap MCP tool calls so
+      # one client cannot induce heavy UK+AU fan-out (0 disables). Tune to taste.
+      PANELAPP_LINK_MCP_RATE_LIMIT_PER_MINUTE: "120"
+      # Scrape GET /metrics for RED metrics; configure an OpenTelemetry SDK +
+      # exporter (e.g. OTLP) to activate the tool/upstream spans.
 
     # No published host ports by default in production; front with a reverse proxy.
     ports: !reset []

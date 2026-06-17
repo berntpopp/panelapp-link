@@ -48,10 +48,13 @@ def register_discovery_tools(mcp: FastMCP) -> None:
         tags={"discovery"},
         description=(
             "Report live backend status: the data mode (live), the upstream "
-            "PanelApp source URLs (UK + Australia), the in-memory cache TTL, and "
-            "current cache stats. Also echoes server_version and "
-            "capabilities_version so a warm client can poll this small payload for "
-            "drift instead of re-fetching full capabilities."
+            "PanelApp source URLs (UK + Australia), the in-memory cache TTL, "
+            "current cache stats, and the RED metrics snapshot (request/error "
+            "counts, cache hit ratio, tool + per-region upstream duration "
+            "p50/p95/p99 -- also exported as Prometheus text at GET /metrics). "
+            "Also echoes server_version and capabilities_version so a warm client "
+            "can poll this small payload for drift instead of re-fetching full "
+            "capabilities."
         ),
     )
     async def get_panelapp_diagnostics() -> dict[str, Any]:

@@ -67,6 +67,25 @@ class PanelAppDataConfigModel(BaseModel):
         le=86400,
         description="In-memory cache TTL in seconds (default 6 hours).",
     )
+    prewarm: bool = Field(
+        default=False,
+        description=(
+            "On server start (HTTP/unified transports), pre-fetch the heavy panel "
+            "list + signed-off list for both regions so the first search_panels is "
+            "warm. Off by default to preserve the stateless no-boot-network posture; "
+            "single-flight + the TTL cache still pay the cold double-fetch at most "
+            "once per process even when this is off."
+        ),
+    )
+    refresh_interval: int = Field(
+        default=0,
+        ge=0,
+        le=86400,
+        description=(
+            "Seconds between background refreshes of the panel + signed-off lists "
+            "(stale-while-revalidate). 0 disables the background task."
+        ),
+    )
 
 
 class ServerSettings(BaseSettings):
@@ -91,6 +110,17 @@ class ServerSettings(BaseSettings):
         default="unified", description="Server transport mode"
     )
     mcp_path: str = Field(default="/mcp", description="MCP endpoint path")
+    mcp_rate_limit_per_minute: int = Field(
+        default=0,
+        ge=0,
+        le=100000,
+        description=(
+            "Per-process MCP tool-call rate cap (token bucket). 0 disables. When "
+            "set, calls over the cap are rejected with a structured rate_limited "
+            "envelope and never reach the upstream PanelApp APIs -- a politeness "
+            "guard for unauthenticated public hosting."
+        ),
+    )
 
     # CORS
     cors_origins: list[str] = Field(

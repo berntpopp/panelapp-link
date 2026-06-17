@@ -82,6 +82,86 @@ def test_health_endpoint_reports_live_status() -> None:
     assert "uk" in body["data"]["sources"]
 
 
+def test_app_has_metrics_route() -> None:
+    app = create_app()
+    paths = {route.path for route in app.routes}  # type: ignore[attr-defined]
+    assert "/metrics" in paths
+
+
+def test_metrics_endpoint_exposes_prometheus_text() -> None:
+    from panelapp_link.observability.metrics import get_metrics, reset_metrics
+
+    reset_metrics()
+    get_metrics().record_request("search_panels", None, 12.0)
+    client = TestClient(create_app())
+    resp = client.get("/metrics")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/plain")
+    assert "panelapp_requests_total" in resp.text
+    assert 'panelapp_requests_total{tool="search_panels"} 1' in resp.text
+
+
+async def test_lifespan_prewarms_and_closes_when_configured() -> None:
+    from panelapp_link.config import settings
+    from panelapp_link.mcp import service_adapters
+    from panelapp_link.server_manager import _lifespan
+
+    calls: list[str] = []
+
+    class _StubService:
+        async def prewarm(self) -> None:
+            calls.append("prewarm")
+
+        async def start_background_refresh(self) -> None:
+            calls.append("refresh")
+
+        async def aclose(self) -> None:
+            calls.append("aclose")
+
+    service_adapters.set_service_for_testing(_StubService())  # type: ignore[arg-type]
+    original = settings.data.prewarm
+    settings.data.prewarm = True
+    try:
+        async with _lifespan(create_app()):
+            pass
+    finally:
+        settings.data.prewarm = original
+        service_adapters.set_service_for_testing(None)
+
+    assert calls == ["prewarm", "refresh", "aclose"]
+
+
+async def test_lifespan_skips_prewarm_when_disabled() -> None:
+    from panelapp_link.config import settings
+    from panelapp_link.mcp import service_adapters
+    from panelapp_link.server_manager import _lifespan
+
+    calls: list[str] = []
+
+    class _StubService:
+        async def prewarm(self) -> None:
+            calls.append("prewarm")
+
+        async def start_background_refresh(self) -> None:
+            calls.append("refresh")
+
+        async def aclose(self) -> None:
+            calls.append("aclose")
+
+    service_adapters.set_service_for_testing(_StubService())  # type: ignore[arg-type]
+    original = settings.data.prewarm
+    settings.data.prewarm = False
+    try:
+        async with _lifespan(create_app()):
+            pass
+    finally:
+        settings.data.prewarm = original
+        service_adapters.set_service_for_testing(None)
+
+    assert "prewarm" not in calls
+    assert calls == ["refresh", "aclose"]
+
+
 def test_root_advertises_mcp_endpoint() -> None:
     client = TestClient(create_app())
     resp = client.get("/")

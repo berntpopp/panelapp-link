@@ -135,6 +135,25 @@ def _static_surface() -> dict[str, Any]:
             "rate_limited",
             "internal_error",
         ],
+        "observability": {
+            "metrics_endpoint": "GET /metrics (Prometheus text 0.0.4; HTTP/unified transport)",
+            "per_call_meta": [
+                "request_id (12-hex correlation id; also an OpenTelemetry span attribute)",
+                "elapsed_ms (server-side wall-clock)",
+                "cache (hit|miss|coalesced|partial)",
+                "upstream_ms + upstream{region:{calls,ms}} (per-region upstream timing)",
+            ],
+            "tracing": (
+                "OpenTelemetry spans wrap each tool call and each upstream region "
+                "fetch (one trace per request, correlated by request_id); activate "
+                "by configuring an OTel SDK + exporter."
+            ),
+            "metrics": (
+                "RED aggregates (request rate, errors by code, tool + per-region "
+                "upstream duration p50/p95/p99, cache hit ratio) via "
+                "get_panelapp_diagnostics and GET /metrics."
+            ),
+        },
         "resources": {
             "panelapp://capabilities": "this document",
             "panelapp://usage": "compact usage notes",
