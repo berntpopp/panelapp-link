@@ -56,8 +56,11 @@ PANELAPP_USAGE_NOTES = (
     "phenotypes, penetrance, signed-off detail, evidence, publications, and raw "
     "extras. Paged tools (search_panels, get_panel_genes, get_gene_panels) page "
     "via an opaque truncated.next_cursor surfaced as _meta.next_commands[0]; "
-    "follow it to page through results. Follow _meta.next_commands to advance "
-    "without guessing the next tool. Paste recommended citations verbatim."
+    "follow it to page through results. Compare gene sets across panels with "
+    "compare_panels(panels=[{panel_id, region}, ...]); look up many genes at "
+    "once with get_panels_for_genes(gene_symbols=[...]) (max 20). Follow "
+    "_meta.next_commands to advance without guessing the next tool. Paste "
+    "recommended citations verbatim."
 )
 
 PANELAPP_REFERENCE_NOTES = (

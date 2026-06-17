@@ -90,6 +90,8 @@ def _static_surface() -> dict[str, Any]:
             "green diagnostic-grade genes on a panel -> "
             "get_panel_genes(panel_id=..., region=..., min_confidence='green')",
             "compare a gene across regions -> get_gene_panels(gene_symbol=..., region='both')",
+            "compare two panels' genes -> compare_panels(panels=[{panel_id, region}, ...])",
+            "triage a gene list -> get_panels_for_genes(gene_symbols=[...], min_confidence='green')",
         ],
         "parameter_conventions": {
             "region": "uk (Genomics England) | australia | both (default). get_panel "
