@@ -7,6 +7,7 @@ small transforms independently testable.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from panelapp_link.constants import CONFIDENCE_RANK, confidence_label
@@ -26,15 +27,62 @@ def confidence(level: Any) -> tuple[str | None, str | None, int | None]:
     return level_str, label, CONFIDENCE_RANK.get(label)
 
 
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _tokens(text: Any) -> list[str]:
+    """Lowercase alphanumeric word tokens of a value (``[]`` for blanks/None)."""
+    return _TOKEN_RE.findall(str(text or "").lower())
+
+
+def _weighted_fields(panel: dict[str, Any]) -> list[tuple[int, str]]:
+    """(weight, text) searchable fields; higher weight = more relevant field."""
+    fields: list[tuple[int, str]] = [(3, str(panel.get("name") or ""))]
+    fields += [(2, str(d)) for d in (panel.get("relevant_disorders") or [])]
+    fields.append((1, str(panel.get("disease_group") or "")))
+    fields.append((1, str(panel.get("disease_sub_group") or "")))
+    return fields
+
+
+def panel_match_score(panel: dict[str, Any], needle: str) -> int:
+    """Relevance score for ``needle`` vs a panel (0 = no match).
+
+    Every query token must word-prefix-match a *whole word* within a single
+    searchable field (so ``renal`` does not match ``adrenal``). The score is the
+    best matching field's weight: name (3) > relevant_disorders (2) > disease
+    group/sub-group (1).
+    """
+    q_tokens = _tokens(needle)
+    if not q_tokens:
+        return 0
+    best = 0
+    for weight, text in _weighted_fields(panel):
+        words = _tokens(text)
+        if words and all(any(w.startswith(qt) for w in words) for qt in q_tokens):
+            best = max(best, weight)
+    return best
+
+
 def panel_matches(panel: dict[str, Any], needle: str) -> bool:
-    """Case-insensitive substring match over searchable panel summary fields."""
-    haystacks = [
-        panel.get("name") or "",
-        panel.get("disease_group") or "",
-        panel.get("disease_sub_group") or "",
-        *(panel.get("relevant_disorders") or []),
-    ]
-    return any(needle in str(value).lower() for value in haystacks)
+    """True when ``needle`` matches a panel by word-prefix (see panel_match_score)."""
+    return panel_match_score(panel, needle) > 0
+
+
+def rank_panels(rows: list[dict[str, Any]], needle: str) -> list[dict[str, Any]]:
+    """Sort normalized panel rows: relevance desc, then name, then region.
+
+    An empty ``needle`` preserves the prior alphabetical (name, region) order.
+    """
+    if not (needle or "").strip():
+        return sorted(rows, key=lambda p: ((p.get("name") or "").lower(), p.get("region") or ""))
+    return sorted(
+        rows,
+        key=lambda p: (
+            -panel_match_score(p, needle),
+            (p.get("name") or "").lower(),
+            p.get("region") or "",
+        ),
+    )
 
 
 def select_entities(detail: dict[str, Any], entity_type: str) -> list[dict[str, Any]]:
