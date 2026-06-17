@@ -113,11 +113,6 @@ def _static_surface() -> dict[str, Any]:
                 "when": "a well-formed panel id / gene resolves to nothing",
             },
             {
-                "code": "ambiguous_query",
-                "operational_only": False,
-                "when": "resolve_gene free text matches multiple genes",
-            },
-            {
                 "code": "upstream_unavailable",
                 "operational_only": True,
                 "when": "a PanelApp API request failed (network or 5xx)",
@@ -136,7 +131,6 @@ def _static_surface() -> dict[str, Any]:
         "error_codes_list": [
             "invalid_input",
             "not_found",
-            "ambiguous_query",
             "upstream_unavailable",
             "rate_limited",
             "internal_error",

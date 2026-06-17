@@ -24,7 +24,6 @@ from panelapp_link.constants import (
     RECOMMENDED_CITATION_UK,
 )
 from panelapp_link.exceptions import (
-    AmbiguousQueryError,
     DownloadError,
     InvalidInputError,
     NotFoundError,
@@ -104,8 +103,6 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
         return "upstream_unavailable", "Could not reach the PanelApp API. Try again later.", True
     if isinstance(exc, NotFoundError):
         return "not_found", str(exc), False
-    if isinstance(exc, AmbiguousQueryError):
-        return "ambiguous_query", str(exc), False
     if isinstance(exc, InvalidInputError):
         msg = f"Invalid input -- `{exc.field}`: {exc.message}" if exc.field else exc.message
         return "invalid_input", msg, False
@@ -121,7 +118,7 @@ def _recovery_action(error_code: str) -> str:
         return "retry_backoff"
     if error_code == "invalid_input":
         return "reformulate_input"
-    if error_code in {"not_found", "ambiguous_query"}:
+    if error_code == "not_found":
         return "switch_tool"
     return "retry_backoff"
 

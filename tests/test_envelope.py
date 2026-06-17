@@ -7,7 +7,6 @@ from typing import Any
 import pytest
 
 from panelapp_link.exceptions import (
-    AmbiguousQueryError,
     DownloadError,
     InvalidInputError,
     NotFoundError,
@@ -71,7 +70,6 @@ class TestErrorClassification:
         ("exc", "code", "retryable", "recovery"),
         [
             (NotFoundError("nope"), "not_found", False, "switch_tool"),
-            (AmbiguousQueryError("amb"), "ambiguous_query", False, "switch_tool"),
             (RateLimitError("limit"), "rate_limited", True, "retry_backoff"),
             (DownloadError("net"), "upstream_unavailable", True, "retry_backoff"),
             (RuntimeError("boom"), "internal_error", False, "retry_backoff"),

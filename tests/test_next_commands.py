@@ -120,10 +120,6 @@ class TestRecoveryCommands:
         out = nc.recovery_commands("search_panels", "invalid_input", {}, None)
         assert out == [{"tool": "get_server_capabilities", "arguments": {}}]
 
-    def test_ambiguous_query_resolve_gene(self) -> None:
-        out = nc.recovery_commands("resolve_gene", "ambiguous_query", {"query": "AMBIG"}, None)
-        assert out == [{"tool": "search_panels", "arguments": {"query": "AMBIG"}}]
-
     def test_unknown_returns_empty(self) -> None:
         assert nc.recovery_commands("search_panels", "internal_error", {}, None) == []
 

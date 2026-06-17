@@ -32,14 +32,6 @@ class NotFoundError(PanelAppError):
     """Raised when a requested panel, gene, or entity does not exist."""
 
 
-class AmbiguousQueryError(PanelAppError):
-    """Raised when a free-text query resolves to multiple candidates."""
-
-    def __init__(self, message: str, candidates: list[str] | None = None) -> None:
-        super().__init__(message)
-        self.candidates = candidates or []
-
-
 class DownloadError(PanelAppError):
     """Raised when PanelApp data cannot be fetched from the upstream API."""
 

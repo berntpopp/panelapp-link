@@ -467,7 +467,6 @@ class PanelAppService:
         self,
         query: str | None = None,
         gene_symbol: str | None = None,
-        hgnc_id: str | None = None,
         region: str = "both",
         response_mode: str = "compact",
     ) -> dict[str, Any]:

@@ -72,7 +72,7 @@ PANELAPP_REFERENCE_NOTES = (
     "both (queries and merges across regions; get_panel requires a single "
     "concrete region). Panels record their latest version plus a signed_off "
     "version and signed_off_date when a release has been signed off. "
-    "Error codes: invalid_input, not_found, ambiguous_query, "
+    "Error codes: invalid_input, not_found, "
     "upstream_unavailable, rate_limited, internal_error. Errors carry retryable "
     "+ recovery_action; invalid_input adds field_errors (a list of "
     "{field, reason}). Paging contract: search_panels, get_panel_genes, and "

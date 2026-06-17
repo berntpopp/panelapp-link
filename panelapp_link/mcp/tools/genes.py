@@ -83,18 +83,16 @@ def register_gene_tools(mcp: FastMCP) -> None:
         output_schema=RESOLVE_GENE_SCHEMA,
         tags={"gene", "search"},
         description=(
-            "Resolve free text, an approved symbol, or an HGNC CURIE to a single "
-            "rolled-up PanelApp gene (symbol, hgnc id, panel count, regions, strongest "
-            "confidence). Pass one of query, gene_symbol, or hgnc_id. region "
-            "(uk|australia|both, default both) scopes the lookup. Returns "
-            "ambiguous_query when an id maps to multiple symbols. Follow up with "
-            "get_gene_panels to list the panels the gene appears on."
+            "Resolve free text or an approved symbol to a single rolled-up PanelApp "
+            "gene (symbol, hgnc id, panel count, regions, strongest confidence). Pass "
+            "query or gene_symbol. region (uk|australia|both, default both) scopes the "
+            "lookup. Follow up with get_gene_panels to list the panels the gene appears "
+            "on."
         ),
     )
     async def resolve_gene(
         query: str | None = None,
         gene_symbol: str | None = None,
-        hgnc_id: str | None = None,
         region: _REGION = "both",
         response_mode: _MODE = "compact",
     ) -> dict[str, Any]:
@@ -102,7 +100,6 @@ def register_gene_tools(mcp: FastMCP) -> None:
             payload = await get_panelapp_service().resolve_gene(
                 query=query,
                 gene_symbol=gene_symbol,
-                hgnc_id=hgnc_id,
                 region=region,
                 response_mode=response_mode,
             )
@@ -117,7 +114,6 @@ def register_gene_tools(mcp: FastMCP) -> None:
                 arguments={
                     "query": query,
                     "gene_symbol": gene_symbol,
-                    "hgnc_id": hgnc_id,
                 },
             ),
             response_mode=response_mode,

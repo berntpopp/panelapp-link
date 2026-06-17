@@ -103,8 +103,6 @@ def recovery_commands(
             nexts = [cmd("search_panels", query=gene_in)]
         elif tool == "get_gene_panels" and gene_in:
             nexts = [cmd("resolve_gene", query=gene_in)]
-    elif error_code == "ambiguous_query" and tool == "resolve_gene":
-        nexts = [cmd("search_panels", query=gene_in)] if gene_in else []
     elif error_code == "invalid_input":
         nexts = [cmd("get_server_capabilities")]
     return nexts[:_MAX_NEXT_COMMANDS]
