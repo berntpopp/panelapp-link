@@ -59,6 +59,12 @@ dev = [
     "opentelemetry-sdk>=1.20.0,<2.0.0",
 ]
 
+[project.optional-dependencies]
+otel = [
+    "opentelemetry-sdk>=1.20.0,<2.0.0",
+    "opentelemetry-exporter-otlp>=1.20.0,<2.0.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/berntpopp/panelapp-link"
 Repository = "https://github.com/berntpopp/panelapp-link"
@@ -130,6 +136,9 @@ module = [
     "pydantic_settings.*",
     "httpx.*",
     "uvicorn.*",
+    # Optional OTLP exporter: only present with the `otel` extra, so its stubs
+    # are absent in the default/dev install. setup_tracing imports it lazily.
+    "opentelemetry.exporter.*",
 ]
 ignore_missing_imports = true
 

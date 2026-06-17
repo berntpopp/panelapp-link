@@ -86,6 +86,22 @@ class PanelAppDataConfigModel(BaseModel):
             "(stale-while-revalidate). 0 disables the background task."
         ),
     )
+    gene_batch_cap: int = Field(
+        default=20,
+        ge=1,
+        le=100,
+        description="Max gene symbols per get_panels_for_genes call (upstream politeness).",
+    )
+
+
+class OtelConfigModel(BaseModel):
+    """OpenTelemetry tracing toggle (opt-in; default no-op)."""
+
+    enabled: bool = Field(default=False, description="Install an OTLP TracerProvider on startup.")
+    console: bool = Field(
+        default=False,
+        description="Also export spans to stderr (dev only; disabled under stdio transport).",
+    )
 
 
 class ServerSettings(BaseSettings):
@@ -139,6 +155,11 @@ class ServerSettings(BaseSettings):
     data: PanelAppDataConfigModel = Field(
         default_factory=PanelAppDataConfigModel,
         description="PanelApp live-API source + cache configuration",
+    )
+
+    # Observability
+    otel: OtelConfigModel = Field(
+        default_factory=OtelConfigModel, description="OpenTelemetry tracing configuration"
     )
 
     @field_validator("mcp_path")

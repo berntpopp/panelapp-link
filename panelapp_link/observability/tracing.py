@@ -16,12 +16,18 @@ Two span kinds, correlated by ``request_id`` so one MCP call is one trace:
 
 from __future__ import annotations
 
+import logging
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
 from opentelemetry import trace
 from opentelemetry.trace import Span, StatusCode
+
+from panelapp_link.config import settings
+
+logger = logging.getLogger(__name__)
 
 _TRACER = trace.get_tracer("panelapp-link")
 
@@ -57,3 +63,32 @@ def record_error(span: Span, error_code: str) -> None:
     """Mark a span as failed and tag it with the structured error code."""
     span.set_attribute("panelapp.error_code", error_code)
     span.set_status(StatusCode.ERROR)
+
+
+def setup_tracing() -> bool:
+    """Install an OTLP TracerProvider when PANELAPP_LINK_OTEL__ENABLED is set.
+
+    No-op (returns False) when disabled or when the SDK/exporter is not
+    installed. The console exporter is stderr-only and suppressed under stdio so
+    it can never corrupt the MCP JSON-RPC channel.
+    """
+    if not settings.otel.enabled:
+        return False
+    try:
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    except ImportError:
+        logger.warning("OTEL enabled but opentelemetry-sdk/exporter missing; tracing stays no-op")
+        return False
+
+    provider = TracerProvider(resource=Resource.create({"service.name": "panelapp-link"}))
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    if settings.otel.console and settings.transport != "stdio":
+        from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
+
+        provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(out=sys.stderr)))
+    trace.set_tracer_provider(provider)
+    logger.info("OpenTelemetry tracing enabled (OTLP)")
+    return True

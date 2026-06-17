@@ -32,8 +32,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """
     from panelapp_link.logging_config import configure_logging
     from panelapp_link.mcp.service_adapters import get_panelapp_service, reset_panelapp_service
+    from panelapp_link.observability.tracing import setup_tracing
 
     logger = configure_logging()
+    setup_tracing()
     logger.info("panelapp-link starting", host=settings.host, port=settings.port)
     service = get_panelapp_service()
     if settings.data.prewarm:
@@ -176,7 +178,9 @@ class UnifiedServerManager:
         if self.logger:
             self.logger.info("Starting stdio MCP server")
         from panelapp_link.mcp.facade import create_panelapp_mcp
+        from panelapp_link.observability.tracing import setup_tracing
 
+        setup_tracing()
         mcp = create_panelapp_mcp()
         # show_banner=False is critical: non-JSON bytes on stdout corrupt framing.
         await mcp.run_async(transport="stdio", show_banner=False)
