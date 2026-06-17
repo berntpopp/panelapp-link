@@ -44,13 +44,9 @@ def register_panel_tools(mcp: FastMCP) -> None:
         output_schema=SEARCH_PANELS_SCHEMA,
         tags={"panel", "search"},
         description=(
-            "Search PanelApp gene panels by name, relevant disorders, or disease "
-            "group across Genomics England (UK) and PanelApp Australia. Returns "
-            "ranked panel summaries (id, name, version, region, disease group, "
-            "entity counts, signed-off status). region='both' (default) merges both "
-            "sources, deduped by (region, panel_id). Use to find a panel id before "
-            "get_panel / get_panel_genes. Page large result sets via the "
-            "truncated.next_cursor (surfaced as _meta.next_commands[0])."
+            "Search PanelApp panels by name, relevant disorders, or disease group "
+            "across UK + Australia (region='both' default), deduped and ranked. Use "
+            "it to find a panel_id, then page via _meta.next_commands."
         ),
     )
     async def search_panels(
@@ -94,10 +90,8 @@ def register_panel_tools(mcp: FastMCP) -> None:
         output_schema=GET_PANEL_SCHEMA,
         tags={"panel"},
         description=(
-            "Return one PanelApp panel's detail plus its entity count breakdown "
-            "(genes / regions / STRs). Panel ids are per-region, so pass a concrete "
-            "region ('uk' or 'australia', NOT 'both'). Widen response_mode for "
-            "signed-off detail. Follow up with get_panel_genes for the panel's genes."
+            "Return one panel's detail plus its entity-count breakdown. region must "
+            "be a single concrete region ('uk' or 'australia'), not 'both'."
         ),
     )
     async def get_panel(
@@ -128,13 +122,10 @@ def register_panel_tools(mcp: FastMCP) -> None:
         output_schema=GET_PANEL_GENES_SCHEMA,
         tags={"panel", "gene"},
         description=(
-            "Return a panel's entities (genes by default; or region/CNV, str, or "
-            "all), filtered by minimum confidence. Pass a concrete region ('uk' or "
-            "'australia'). min_confidence is a traffic-light floor: green = green "
-            "only, amber = amber+green, red = all. Widen response_mode for "
-            "phenotypes/penetrance (standard) or evidence/publications (full). Page "
-            "via the truncated.next_cursor (surfaced as "
-            "_meta.next_commands[0])."
+            "Return a panel's entities (genes by default; or region | str | all), "
+            "filtered by min_confidence (green = green only; amber = amber+green; "
+            "red = all). region must be concrete; widen response_mode for "
+            "phenotypes/evidence."
         ),
     )
     async def get_panel_genes(

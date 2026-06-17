@@ -40,14 +40,9 @@ def register_gene_tools(mcp: FastMCP) -> None:
         output_schema=GET_GENE_PANELS_SCHEMA,
         tags={"gene"},
         description=(
-            "Return every PanelApp panel a gene appears on, across regions, sorted "
-            "by confidence (green > amber > red) then region. Query by gene_symbol "
-            "(the approved symbol, e.g. BRCA1) -- this is the required query key. "
-            "hgnc_id (HGNC CURIE, e.g. HGNC:1100) is an OPTIONAL disambiguation "
-            "filter applied to the results, not a stand-alone query; pass it "
-            "alongside gene_symbol. region='both' (default) spans UK + Australia; "
-            "min_confidence floors the traffic-light rank (green = green only). Use "
-            "resolve_gene first if a free-text symbol is uncertain."
+            "Return every panel a gene appears on across regions, sorted by "
+            "confidence. Query by gene_symbol (required); hgnc_id is an OPTIONAL "
+            "result filter, not a standalone query."
         ),
     )
     async def get_gene_panels(
