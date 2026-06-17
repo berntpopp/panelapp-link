@@ -46,11 +46,13 @@ def after_search_panels(panels: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def after_resolve_gene(gene: dict[str, Any]) -> list[dict[str, Any]]:
-    """After resolving a gene: list every panel it appears on across regions."""
+    """After resolving a gene: list every panel it appears on across regions.
+
+    PanelApp is queried by gene symbol, so the breadcrumb passes ``gene_symbol``
+    (the canonical query key). ``hgnc_id`` is only an optional result filter and
+    cannot drive ``get_gene_panels`` on its own, so it is never emitted alone.
+    """
     symbol = gene.get("gene_symbol")
-    hgnc_id = gene.get("hgnc_id")
-    if hgnc_id:
-        return [cmd("get_gene_panels", hgnc_id=hgnc_id)]
     if symbol:
         return [cmd("get_gene_panels", gene_symbol=symbol)]
     return []
