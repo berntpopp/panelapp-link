@@ -86,6 +86,22 @@ class TestBuildCapabilities:
         assert caps["tool_defaults"]["search_panels"] == "compact"
         assert caps["tool_defaults"]["get_server_capabilities"] == "n/a"
 
+    def test_hgnc_is_filter_not_query_key(self) -> None:
+        # The contract must state gene_symbol drives the query and hgnc_id is an
+        # optional result filter -- not a co-equal, mutually-exclusive identifier.
+        conv = build_capabilities()["parameter_conventions"]
+        assert "mutually exclusive" not in conv["hgnc_id"].lower()
+        assert "filter" in conv["hgnc_id"].lower()
+        assert "mutually exclusive" not in conv["gene_symbol"].lower()
+
+    def test_workflows_query_by_gene_symbol(self) -> None:
+        # Neither the recommended workflows nor the usage prose should suggest
+        # driving get_gene_panels by hgnc_id (gene_symbol is the query key).
+        caps = build_capabilities()
+        workflows = " ".join(caps["recommended_workflows"]).lower()
+        assert "hgnc_id=" not in workflows
+        assert "hgnc_id=" not in caps["usage_notes"].lower()
+
     def test_capabilities_version_16_hex(self) -> None:
         caps = build_capabilities()
         version = caps["capabilities_version"]
