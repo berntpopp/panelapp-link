@@ -141,8 +141,15 @@ class TestCitationByMode:
             return {}
 
         out = await run_mcp_tool("t", body, response_mode=mode)
+        # citation_ref (the cheap stub) rides every non-full mode, including
+        # minimal; the verbatim citation lives at panelapp://citation.
         assert out["_meta"]["citation_ref"] == "panelapp://citation"
-        assert out["_meta"]["citation_short"]
+        # citation_short is shed in minimal mode (WS-4a token-lean) but kept in
+        # compact/standard.
+        if mode == "minimal":
+            assert "citation_short" not in out["_meta"]
+        else:
+            assert out["_meta"]["citation_short"]
         assert "recommended_citation" not in out["_meta"]
         assert "data_license" not in out["_meta"]
         assert out["_meta"]["response_mode"] == mode

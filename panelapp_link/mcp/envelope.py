@@ -243,10 +243,14 @@ async def run_mcp_tool(
                     "request_id": request_id,
                     "elapsed_ms": elapsed_ms,
                 }
-                # Minimal mode is for sweep/agent-loop workloads: keep only the
-                # single highest-value next step to cut the per-call token tax.
-                if response_mode == "minimal" and meta.get("next_commands"):
-                    meta["next_commands"] = meta["next_commands"][:1]
+                # Minimal mode is for sweep/agent-loop workloads: shed per-call
+                # token tax -- one next step, and drop upstream timing + the
+                # redundant short citation (the citation_ref stub still rides).
+                if response_mode == "minimal":
+                    for heavy in ("upstream", "upstream_ms", "citation_short"):
+                        meta.pop(heavy, None)
+                    if meta.get("next_commands"):
+                        meta["next_commands"] = meta["next_commands"][:1]
                 result["_meta"] = meta
             return result
         except Exception as exc:  # broad catch is the error-boundary contract
