@@ -16,7 +16,8 @@ Verbosity contract (panels):
     minimal  - panel_id, name, region, n_genes/n_regions/n_strs
     compact  - + version, disease_group, disease_sub_group, status,
                signed_off_version/date, relevant_disorders
-    standard - + version_created, description, types, entity_counts
+    standard - + version_created, description, types, entity_counts,
+               confidence_counts (per-entity-type traffic-light tallies on detail)
     full     - the full normalized row, untrimmed
 
 Verbosity contract (entities):
@@ -57,6 +58,23 @@ _STR_EXTRA_FIELDS = (
 def _as_str_or_none(value: Any) -> str | None:
     """Cast a value to ``str`` (PanelApp versions/levels arrive as int or str)."""
     return None if value is None else str(value)
+
+
+def _confidence_counts(live: dict[str, Any]) -> dict[str, dict[str, int]]:
+    """Per-entity-type traffic-light tallies from a panel detail payload."""
+    out: dict[str, dict[str, int]] = {}
+    for etype, key in (("gene", "genes"), ("region", "regions"), ("str", "strs")):
+        items = live.get(key)
+        if not items:
+            continue
+        counts = {"green": 0, "amber": 0, "red": 0}
+        for item in items:
+            level = _as_str_or_none(item.get("confidence_level"))
+            label = confidence_label(level) if level is not None else None
+            if label in counts:
+                counts[label] += 1
+        out[etype] = counts
+    return out
 
 
 def normalize_panel(
@@ -103,6 +121,7 @@ def normalize_panel(
             "region": len(live.get("regions") or []),
             "str": len(live.get("strs") or []),
         }
+        out["confidence_counts"] = _confidence_counts(live)
     return out
 
 
@@ -212,6 +231,7 @@ def shape_panel(row: dict[str, Any], mode: ResponseMode) -> dict[str, Any]:
             "description": row.get("description"),
             "types": row.get("types", []),
             "entity_counts": row.get("entity_counts", {}),
+            "confidence_counts": row.get("confidence_counts", {}),
         }
     )
     return out
