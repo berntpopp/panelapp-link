@@ -29,6 +29,16 @@ _NEXT_COMMANDS = {
     },
 }
 
+_UPSTREAM = {
+    "type": "object",
+    "description": "Per-region upstream fetch timing for this call ({calls, ms}).",
+    "additionalProperties": {
+        "type": "object",
+        "properties": {"calls": _INT, "ms": {"type": "number"}},
+        "additionalProperties": True,
+    },
+}
+
 _META = {
     "type": "object",
     "description": "Per-call envelope metadata.",
@@ -43,6 +53,10 @@ _META = {
         "citation_short": _STR,
         "next_commands": _NEXT_COMMANDS,
         "tool": _STR,
+        # Observability breadcrumbs (why did this call take N ms?):
+        "cache": {"type": "string", "enum": ["hit", "miss", "coalesced", "partial"]},
+        "upstream_ms": {"type": "number"},
+        "upstream": _UPSTREAM,
     },
     "additionalProperties": True,
 }
@@ -106,6 +120,31 @@ CAPABILITIES_SCHEMA = tool_output_schema(
     capabilities_version=_STR,
     data=_OBJ,
 )
+_DIAGNOSTICS_DATA: dict[str, Any] = {
+    "type": "object",
+    "description": "Live backend status, cache stats, and the RED metrics snapshot.",
+    "properties": {
+        "mode": _STR,
+        "sources": _OBJ,
+        "cache_ttl_seconds": _INT,
+        "cache": _OBJ,
+        "metrics": {
+            "type": "object",
+            "description": "Process-wide RED aggregates (also at GET /metrics).",
+            "properties": {
+                "requests_total": _INT,
+                "requests_by_tool": _OBJ,
+                "errors_total": _INT,
+                "errors_by_code": _OBJ,
+                "cache": _OBJ,
+                "tool_duration_ms": _OBJ,
+                "upstream_duration_ms": _OBJ,
+            },
+            "additionalProperties": True,
+        },
+    },
+    "additionalProperties": True,
+}
 DIAGNOSTICS_SCHEMA = tool_output_schema(
-    server_version=_STR, capabilities_version=_STR, data=_OBJ, refresh=_OBJ
+    server_version=_STR, capabilities_version=_STR, data=_DIAGNOSTICS_DATA, refresh=_OBJ
 )

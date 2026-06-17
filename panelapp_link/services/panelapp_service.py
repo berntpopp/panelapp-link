@@ -22,8 +22,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
-import time
+import logging
 from typing import TYPE_CHECKING, Any
 
 from panelapp_link.config import get_data_config
@@ -34,12 +35,16 @@ from panelapp_link.exceptions import (
     NotFoundError,
 )
 from panelapp_link.models.enums import ENTITY_TYPES, RESPONSE_MODES, ResponseMode
+from panelapp_link.observability.metrics import get_metrics
 from panelapp_link.services import _live_helpers as helpers
 from panelapp_link.services import shaping
+from panelapp_link.services.cache import RequestCache
 
 if TYPE_CHECKING:
     from panelapp_link.api.client import PanelAppRestClient
     from panelapp_link.config import PanelAppDataConfigModel
+
+logger = logging.getLogger(__name__)
 
 _MAX_LIMIT = 500
 
@@ -53,37 +58,6 @@ _REGION_MAP: dict[str, list[str]] = {
 _TRUNCATION_HINT = (
     "More results available; re-call with next_offset, or follow next_cursor for paging."
 )
-
-
-class _TTLCache:
-    """Tiny insertion-ordered TTL cache (disabled when maxsize <= 0)."""
-
-    def __init__(self, maxsize: int, ttl: int) -> None:
-        self._maxsize = maxsize
-        self._ttl = ttl
-        self._store: dict[str, tuple[float, Any]] = {}
-
-    def get(self, key: str) -> Any | None:
-        if self._maxsize <= 0:
-            return None
-        item = self._store.get(key)
-        if item is None:
-            return None
-        expires_at, value = item
-        if expires_at < time.monotonic():
-            self._store.pop(key, None)
-            return None
-        return value
-
-    def put(self, key: str, value: Any) -> None:
-        if self._maxsize <= 0:
-            return
-        if len(self._store) >= self._maxsize and key not in self._store:
-            self._store.pop(next(iter(self._store)), None)
-        self._store[key] = (time.monotonic() + self._ttl, value)
-
-    def stats(self) -> dict[str, int]:
-        return {"entries": len(self._store), "maxsize": self._maxsize, "ttl": self._ttl}
 
 
 def _encode_cursor(offset: int) -> str:
@@ -118,8 +92,10 @@ class PanelAppService:
     ) -> None:
         self._client = client
         self._config = config if config is not None else get_data_config()
-        self._cache = _TTLCache(cache_size, cache_ttl)
+        self._cache = RequestCache(maxsize=cache_size, ttl=cache_ttl)
         self._cache_ttl = cache_ttl
+        self._refresh_interval = self._config.refresh_interval
+        self._refresh_task: asyncio.Task[None] | None = None
         self._base_by_region: dict[str, str] = {
             "uk": self._config.uk_api_url,
             "australia": self._config.au_api_url,
@@ -203,60 +179,61 @@ class PanelAppService:
     # --- cached live fetches -------------------------------------------
 
     async def _panel_list(self, region_key: str) -> list[dict[str, Any]]:
-        """Return (cached) the full panel-summary list for a region."""
-        key = f"panels:{region_key}"
-        cached = self._cache.get(key)
-        if cached is not None:
-            return cached  # type: ignore[no-any-return]
-        rows = await self._client.list_panels(self._base_by_region[region_key])
-        self._cache.put(key, rows)
-        return rows
+        """Return (cached, single-flight) the full panel-summary list for a region."""
+        base = self._base_by_region[region_key]
+        return await self._cache.get_or_fetch(  # type: ignore[no-any-return]
+            f"panels:{region_key}",
+            region_key,
+            "panels",
+            lambda: self._client.list_panels(base),
+        )
 
     async def _signed_off_map(self, region_key: str) -> dict[int, dict[str, Any]]:
-        """Return (cached, lazy) ``{panel_id: {version, signed_off}}`` for a region."""
-        key = f"signedoff:{region_key}"
-        cached = self._cache.get(key)
-        if cached is not None:
-            return cached  # type: ignore[no-any-return]
-        rows = await self._client.list_signed_off(self._base_by_region[region_key])
-        out: dict[int, dict[str, Any]] = {}
-        for row in rows:
-            pid = row.get("id")
-            if pid is None:
-                continue
-            out[int(pid)] = {"version": row.get("version"), "signed_off": row.get("signed_off")}
-        self._cache.put(key, out)
-        return out
+        """Return (cached, single-flight) ``{panel_id: {version, signed_off}}`` for a region."""
+        base = self._base_by_region[region_key]
+
+        async def fetch() -> dict[int, dict[str, Any]]:
+            rows = await self._client.list_signed_off(base)
+            out: dict[int, dict[str, Any]] = {}
+            for row in rows:
+                pid = row.get("id")
+                if pid is None:
+                    continue
+                out[int(pid)] = {"version": row.get("version"), "signed_off": row.get("signed_off")}
+            return out
+
+        return await self._cache.get_or_fetch(  # type: ignore[no-any-return]
+            f"signedoff:{region_key}", region_key, "signedoff", fetch
+        )
 
     async def _panel_detail(self, region_key: str, panel_id: int) -> dict[str, Any]:
-        """Return (cached) the full panel detail for a region/id, mapping 404 -> NotFound."""
-        key = f"panel:{region_key}:{panel_id}"
-        cached = self._cache.get(key)
-        if cached is not None:
-            return cached  # type: ignore[no-any-return]
-        try:
-            detail = await self._client.get_panel(self._base_by_region[region_key], panel_id)
-        except DownloadError as exc:
-            if exc.status_code == 404:
-                raise NotFoundError(
-                    f"No PanelApp panel {panel_id} in region {region_key!r}. "
-                    "Try search_panels to find a panel id."
-                ) from exc
-            raise
-        self._cache.put(key, detail)
-        return detail
+        """Return (cached, single-flight) the full panel detail, mapping 404 -> NotFound."""
+        base = self._base_by_region[region_key]
+
+        async def fetch() -> dict[str, Any]:
+            try:
+                return await self._client.get_panel(base, panel_id)
+            except DownloadError as exc:
+                if exc.status_code == 404:
+                    raise NotFoundError(
+                        f"No PanelApp panel {panel_id} in region {region_key!r}. "
+                        "Try search_panels to find a panel id."
+                    ) from exc
+                raise
+
+        return await self._cache.get_or_fetch(  # type: ignore[no-any-return]
+            f"panel:{region_key}:{panel_id}", region_key, "panel", fetch
+        )
 
     async def _genes_by_name(self, region_key: str, entity_name: str) -> list[dict[str, Any]]:
-        """Return (cached) ``/genes/?entity_name=`` results for a region."""
-        key = f"genes:{region_key}:{entity_name.upper()}"
-        cached = self._cache.get(key)
-        if cached is not None:
-            return cached  # type: ignore[no-any-return]
-        rows = await self._client.get_genes_by_entity_name(
-            self._base_by_region[region_key], entity_name
+        """Return (cached, single-flight) ``/genes/?entity_name=`` results for a region."""
+        base = self._base_by_region[region_key]
+        return await self._cache.get_or_fetch(  # type: ignore[no-any-return]
+            f"genes:{region_key}:{entity_name.upper()}",
+            region_key,
+            "genes",
+            lambda: self._client.get_genes_by_entity_name(base, entity_name),
         )
-        self._cache.put(key, rows)
-        return rows
 
     # --- search ---------------------------------------------------------
 
@@ -511,6 +488,68 @@ class PanelAppService:
                 out.append((region_key, row))
         return out
 
+    # --- warm-up / background refresh -----------------------------------
+
+    async def prewarm(self) -> None:
+        """Pre-fetch the heavy list endpoints for both regions (best-effort).
+
+        Populates the panel-summary + signed-off lists so the first
+        ``search_panels`` never pays the cold double-fetch. Errors are swallowed
+        (logged) so a transient upstream failure never blocks startup.
+        """
+        try:
+            await asyncio.gather(
+                *(self._panel_list(r) for r in _REGION_MAP["both"]),
+                *(self._signed_off_map(r) for r in _REGION_MAP["both"]),
+            )
+        except Exception as exc:  # best-effort warm-up; never fatal
+            logger.warning("panelapp prewarm failed: %s", exc)
+
+    async def refresh_panel_lists(self) -> None:
+        """Force-refresh the panel + signed-off lists for both regions.
+
+        Overwrites the cached lists (stale-while-revalidate) so a long-lived
+        process keeps ``search_panels`` warm past the TTL without an on-path miss.
+        """
+        for region_key in _REGION_MAP["both"]:
+            base = self._base_by_region[region_key]
+            rows = await self._client.list_panels(base)
+            self._cache.put(f"panels:{region_key}", rows)
+            signed = await self._client.list_signed_off(base)
+            out: dict[int, dict[str, Any]] = {}
+            for row in signed:
+                pid = row.get("id")
+                if pid is None:
+                    continue
+                out[int(pid)] = {"version": row.get("version"), "signed_off": row.get("signed_off")}
+            self._cache.put(f"signedoff:{region_key}", out)
+
+    async def start_background_refresh(self) -> asyncio.Task[None] | None:
+        """Start the periodic list-refresh loop if ``refresh_interval`` > 0."""
+        if self._refresh_interval <= 0:
+            return None
+        if self._refresh_task is None or self._refresh_task.done():
+            self._refresh_task = asyncio.ensure_future(self._refresh_loop(self._refresh_interval))
+        return self._refresh_task
+
+    async def _refresh_loop(self, interval: int) -> None:
+        """Sleep ``interval`` seconds, then refresh the lists; repeat until cancelled."""
+        while True:  # pragma: no cover - timing loop exercised via refresh_panel_lists
+            await asyncio.sleep(interval)
+            try:
+                await self.refresh_panel_lists()
+            except Exception as exc:
+                logger.warning("panelapp background refresh failed: %s", exc)
+
+    async def aclose(self) -> None:
+        """Cancel the background refresh task, if any."""
+        task = self._refresh_task
+        self._refresh_task = None
+        if task is not None and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
     # --- discovery ------------------------------------------------------
 
     def capabilities_data(self) -> dict[str, Any]:
@@ -525,7 +564,7 @@ class PanelAppService:
         }
 
     def diagnostics(self) -> dict[str, Any]:
-        """Return live source/config + cache stats (never raises)."""
+        """Return live source/config + cache stats + the RED metrics snapshot."""
         return {
             "mode": "live",
             "sources": {
@@ -534,4 +573,5 @@ class PanelAppService:
             },
             "cache_ttl_seconds": self._cache_ttl,
             "cache": self._cache.stats(),
+            "metrics": get_metrics().snapshot(),
         }

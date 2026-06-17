@@ -166,6 +166,24 @@ async def test_get_panelapp_diagnostics_success(mcp_client: Client) -> None:
     assert "capabilities_version" in data
 
 
+async def test_diagnostics_surfaces_red_metrics(mcp_client: Client) -> None:
+    await mcp_client.call_tool("search_panels", {"region": "uk"})
+    data = (await mcp_client.call_tool("get_panelapp_diagnostics", {})).structured_content
+    metrics = data["data"]["metrics"]
+    assert "cache" in metrics
+    assert "tool_duration_ms" in metrics
+    assert metrics["requests_total"] >= 1
+
+
+async def test_tool_meta_surfaces_cache_and_upstream_timing(mcp_client: Client) -> None:
+    data = (await mcp_client.call_tool("search_panels", {"region": "both"})).structured_content
+    meta = data["_meta"]
+    # Cold call: the heavy double-fetch shows up as a cache miss + upstream timing.
+    assert meta["cache"] in {"miss", "partial"}
+    assert meta["upstream_ms"] >= 0
+    assert set(meta["upstream"]) <= {"uk", "australia"}
+
+
 # --- bad input -> success:false + invalid_input ---
 
 

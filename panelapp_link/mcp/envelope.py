@@ -30,6 +30,8 @@ from panelapp_link.exceptions import (
     RateLimitError,
 )
 from panelapp_link.mcp.next_commands import recovery_commands
+from panelapp_link.observability import telemetry, tracing
+from panelapp_link.observability.metrics import get_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +182,29 @@ def validation_error_envelope(
     byte-compatible with a domain ``invalid_input`` raised inside a tool body.
     """
     ctx = McpErrorContext(tool_name=tool_name, arguments=arguments)
-    return _error_envelope(exc, ctx, request_id=uuid.uuid4().hex[:12], elapsed_ms=0.0)
+    envelope = _error_envelope(exc, ctx, request_id=uuid.uuid4().hex[:12], elapsed_ms=0.0)
+    get_metrics().record_request(tool_name, envelope["error_code"], 0.0)
+    return envelope
+
+
+def rate_limited_envelope(tool_name: str) -> dict[str, Any]:
+    """Structured ``rate_limited`` envelope for an MCP-layer throttle rejection.
+
+    Mirrors a domain ``rate_limited`` error so the client sees a chainable,
+    retryable failure (with a ``retry_backoff`` recovery action) instead of an
+    upstream call it should never have triggered.
+    """
+    ctx = McpErrorContext(tool_name=tool_name)
+    exc = McpToolError(
+        error_code="rate_limited",
+        message=(
+            "This MCP server is rate-limiting requests to stay polite to the "
+            "upstream PanelApp APIs. Retry after a short backoff."
+        ),
+    )
+    envelope = _error_envelope(exc, ctx, request_id=uuid.uuid4().hex[:12], elapsed_ms=0.0)
+    get_metrics().record_request(tool_name, "rate_limited", 0.0)
+    return envelope
 
 
 async def run_mcp_tool(
@@ -198,26 +222,44 @@ async def run_mcp_tool(
     ctx = context or McpErrorContext(tool_name=tool_name)
     request_id = uuid.uuid4().hex[:12]
     start = time.perf_counter()
-    try:
-        result = await call()
-        elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-        if isinstance(result, dict):
-            result.setdefault("success", True)
-            existing_meta: dict[str, Any] = result.get("_meta") or {}
-            result["_meta"] = {
-                **existing_meta,
-                **_provenance_meta(response_mode),
-                "request_id": request_id,
-                "elapsed_ms": elapsed_ms,
-            }
-        return result
-    except Exception as exc:  # broad catch is the error-boundary contract
-        elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-        envelope = _error_envelope(exc, ctx, request_id=request_id, elapsed_ms=elapsed_ms)
-        logger.warning(
-            "mcp_tool_error tool=%s code=%s exc=%s",
-            tool_name,
-            envelope["error_code"],
-            exc.__class__.__name__,
-        )
-        return envelope
+    metrics = get_metrics()
+    with (
+        telemetry.request_scope(request_id) as scope,
+        tracing.tool_span(
+            tool_name, request_id, {"mcp.response_mode": response_mode or ""}
+        ) as span,
+    ):
+        try:
+            result = await call()
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+            metrics.record_request(tool_name, None, elapsed_ms)
+            if isinstance(result, dict):
+                result.setdefault("success", True)
+                existing_meta: dict[str, Any] = result.get("_meta") or {}
+                meta: dict[str, Any] = {
+                    **existing_meta,
+                    **_provenance_meta(response_mode),
+                    **telemetry.telemetry_meta(scope),
+                    "request_id": request_id,
+                    "elapsed_ms": elapsed_ms,
+                }
+                # Minimal mode is for sweep/agent-loop workloads: keep only the
+                # single highest-value next step to cut the per-call token tax.
+                if response_mode == "minimal" and meta.get("next_commands"):
+                    meta["next_commands"] = meta["next_commands"][:1]
+                result["_meta"] = meta
+            return result
+        except Exception as exc:  # broad catch is the error-boundary contract
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+            envelope = _error_envelope(exc, ctx, request_id=request_id, elapsed_ms=elapsed_ms)
+            error_code = envelope["error_code"]
+            metrics.record_request(tool_name, error_code, elapsed_ms)
+            tracing.record_error(span, error_code)
+            envelope["_meta"].update(telemetry.telemetry_meta(scope))
+            logger.warning(
+                "mcp_tool_error tool=%s code=%s exc=%s",
+                tool_name,
+                error_code,
+                exc.__class__.__name__,
+            )
+            return envelope
