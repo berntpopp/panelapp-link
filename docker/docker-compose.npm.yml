@@ -1,0 +1,84 @@
+# Nginx Proxy Manager deployment overlay for panelapp-link.
+#
+# Self-contained (used standalone, not layered on docker-compose.yml): one
+# unified container serves the FastAPI REST API on / and the MCP streamable-HTTP
+# transport on /mcp via a single port (8000). NPM reverse-proxies to the fixed
+# container_name on the shared external npm_default network. Mirrors the
+# gtex-link / uniprot-link fleet pattern. Pure live-API client (PanelApp UK+AU)
+# with an in-memory cache - no database, no data volume.
+#
+#   docker compose -f docker/docker-compose.npm.yml --env-file .env.docker up -d --build
+name: panelapp-link-npm
+
+services:
+  panelapp_link:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: production
+    container_name: panelapp-link-npm
+    # NO published host ports - NPM handles all routing via the container name.
+    expose:
+      - "8000"
+    environment:
+      - PANELAPP_LINK_HOST=0.0.0.0
+      - PANELAPP_LINK_PORT=8000
+      - PANELAPP_LINK_TRANSPORT=unified
+      - PANELAPP_LINK_MCP_PATH=/mcp
+      - PANELAPP_LINK_LOG_LEVEL=${LOG_LEVEL_API:-INFO}
+      - PANELAPP_LINK_LOG_FORMAT=json
+      # Production cache tuning (from docker-compose.prod.yml): warm the heavy
+      # panel lists at boot + keep them warm so search_panels never pays the
+      # cold double-fetch (single worker => one shared process cache).
+      - PANELAPP_LINK_DATA__CACHE_SIZE=2000
+      - PANELAPP_LINK_DATA__CACHE_TTL=7200
+      - PANELAPP_LINK_DATA__PREWARM=true
+      - PANELAPP_LINK_DATA__REFRESH_INTERVAL=3600
+      # Politeness guard for unauthenticated public hosting: cap MCP tool calls
+      # so one client cannot induce heavy UK+AU fan-out (0 disables).
+      - PANELAPP_LINK_MCP_RATE_LIMIT_PER_MINUTE=120
+    # Image ENTRYPOINT + CMD already run `python server.py --transport unified`.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      # Stateless live-API client: ready to serve almost immediately.
+      start_period: 30s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      # TMPDIR=/tmp/panelapp-link (set in the image) - scratch space.
+      - /tmp/panelapp-link:rw,noexec,nosuid,size=64m,mode=1777
+    networks:
+      - panelapp_link_internal_net
+      - npm_proxy_network
+    deploy:
+      resources:
+        limits:
+          memory: ${PANELAPP_API_MEMORY_LIMIT:-1g}
+          cpus: ${PANELAPP_API_CPU_LIMIT:-1.0}
+          pids: 256
+        reservations:
+          memory: 256m
+          cpus: 0.25
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        labels: "service=panelapp-link,environment=production,proxy=npm"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    init: true
+
+networks:
+  panelapp_link_internal_net:
+    driver: bridge
+    name: panelapp_link_internal_net
+  npm_proxy_network:
+    external: true
+    name: ${NPM_SHARED_NETWORK_NAME:-npm_default}
