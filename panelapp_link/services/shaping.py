@@ -193,11 +193,11 @@ def shape_panel(row: dict[str, Any], mode: ResponseMode) -> dict[str, Any]:
         A JSON-ready dict trimmed to the mode.
     """
     if mode == "full":
-        out = dict(row)
-        out["n_genes"] = out.pop("number_of_genes", 0)
-        out["n_regions"] = out.pop("number_of_regions", 0)
-        out["n_strs"] = out.pop("number_of_strs", 0)
-        return out
+        full_out = dict(row)
+        full_out["n_genes"] = full_out.pop("number_of_genes", 0)
+        full_out["n_regions"] = full_out.pop("number_of_regions", 0)
+        full_out["n_strs"] = full_out.pop("number_of_strs", 0)
+        return full_out
 
     out: dict[str, Any] = {
         "panel_id": row.get("panel_id"),
