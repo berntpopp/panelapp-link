@@ -35,6 +35,8 @@ TOOLS: tuple[str, ...] = (
     "get_panel_genes",
     "get_gene_panels",
     "resolve_gene",
+    "compare_panels",
+    "get_panels_for_genes",
     "get_server_capabilities",
     "get_panelapp_diagnostics",
 )
@@ -76,6 +78,8 @@ def _static_surface() -> dict[str, Any]:
             "get_panel_genes": "compact",
             "get_gene_panels": "compact",
             "resolve_gene": "compact",
+            "compare_panels": "compact",
+            "get_panels_for_genes": "compact",
             "get_server_capabilities": "n/a",
             "get_panelapp_diagnostics": "n/a",
         },

@@ -17,15 +17,17 @@ _EXPECTED_TOOLS = {
     "get_panel_genes",
     "get_gene_panels",
     "resolve_gene",
+    "compare_panels",
+    "get_panels_for_genes",
     "get_server_capabilities",
     "get_panelapp_diagnostics",
 }
 
 
 class TestBuildCapabilities:
-    def test_seven_tools(self) -> None:
+    def test_nine_tools(self) -> None:
         caps = build_capabilities()
-        assert len(caps["tools"]) == 7
+        assert len(caps["tools"]) == 9
         assert set(caps["tools"]) == _EXPECTED_TOOLS
         assert set(TOOLS) == _EXPECTED_TOOLS
 

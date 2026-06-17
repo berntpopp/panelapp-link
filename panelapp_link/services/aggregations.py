@@ -28,6 +28,8 @@ class _Service(Protocol):
         entity_type: str = ...,
         min_confidence: str | None = ...,
         response_mode: str = ...,
+        limit: int = ...,
+        offset: int = ...,
         cursor: str | None = ...,
     ) -> dict[str, Any]: ...
     async def get_gene_panels(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from panelapp_link.mcp.tools.aggregations import register_aggregation_tools
 from panelapp_link.mcp.tools.discovery import register_discovery_tools
 from panelapp_link.mcp.tools.genes import register_gene_tools
 from panelapp_link.mcp.tools.panels import register_panel_tools
@@ -12,6 +13,7 @@ if TYPE_CHECKING:
     from fastmcp import FastMCP
 
 __all__ = [
+    "register_aggregation_tools",
     "register_all_tools",
     "register_discovery_tools",
     "register_gene_tools",
@@ -20,7 +22,8 @@ __all__ = [
 
 
 def register_all_tools(mcp: FastMCP) -> None:
-    """Register every PanelApp-Link tool (panels, genes, discovery) on ``mcp``."""
+    """Register every PanelApp-Link tool (panels, genes, aggregations, discovery)."""
     register_panel_tools(mcp)
     register_gene_tools(mcp)
+    register_aggregation_tools(mcp)
     register_discovery_tools(mcp)

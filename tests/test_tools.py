@@ -166,7 +166,7 @@ async def test_get_server_capabilities_success(mcp_client: Client) -> None:
     result = await mcp_client.call_tool("get_server_capabilities", {})
     data = result.structured_content
     assert data["success"] is True
-    assert len(data["tools"]) == 7
+    assert len(data["tools"]) == 9
     assert "capabilities_version" in data
     assert data["data"]["mode"] == "live"
 

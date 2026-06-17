@@ -26,6 +26,8 @@ EXPECTED_TOOLS = {
     "get_panel_genes",
     "get_gene_panels",
     "resolve_gene",
+    "compare_panels",
+    "get_panels_for_genes",
     "get_server_capabilities",
     "get_panelapp_diagnostics",
 }

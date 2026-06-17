@@ -27,6 +27,8 @@ EXPECTED_TOOLS = {
     "get_panel_genes",
     "get_gene_panels",
     "resolve_gene",
+    "compare_panels",
+    "get_panels_for_genes",
     "get_server_capabilities",
     "get_panelapp_diagnostics",
 }
@@ -35,12 +37,12 @@ EXPECTED_TOOLS = {
 # --- Facade ---------------------------------------------------------------
 
 
-async def test_facade_builds_and_exposes_seven_tools() -> None:
+async def test_facade_builds_and_exposes_nine_tools() -> None:
     mcp = create_panelapp_mcp()
     tools = await mcp.list_tools()
     names = {tool.name for tool in tools}
     assert names == EXPECTED_TOOLS
-    assert len(names) == 7
+    assert len(names) == 9
 
 
 def test_facade_is_named_and_instructed() -> None:
