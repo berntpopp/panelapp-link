@@ -23,10 +23,13 @@ A drop-in sibling of the `*-link` MCP fleet (e.g. `gencc-link`, `hgnc-link`).
   signed-off endpoint.
 - **Cross-region gene roll-up** — fast gene-to-panels lookups aggregated across
   both regions (panel count, regions present, max confidence).
+- **Server-side aggregation** — `compare_panels` diffs the genes of 2–5 panels
+  (shared / only-in / confidence deltas), and `get_panels_for_genes` resolves
+  panel membership for up to 20 gene symbols in one call.
 - **Pure live-API client, no database** — queries the public PanelApp REST APIs
   per request and memoizes raw payloads in an in-memory TTL cache (default 6h),
   so the server is stateless: no SQLite mirror, no ingest, no build step.
-- **7 MCP tools** with token-efficient `response_mode` shaping, typed
+- **9 MCP tools** with token-efficient `response_mode` shaping, typed
   `outputSchema`, plain-English headlines, and ready-to-call
   `_meta.next_commands` chains — on success **and** error envelopes, so recovery
   is deterministic.

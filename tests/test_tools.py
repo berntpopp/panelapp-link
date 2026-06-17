@@ -38,7 +38,9 @@ async def mcp_client(live_service: PanelAppService) -> AsyncIterator[Client]:
         reset_panelapp_service()
 
 
-# --- happy path: each of the 7 tools returns success + expected payload keys ---
+# --- happy path: the core tools return success + expected payload keys ---
+# (the compare_panels / get_panels_for_genes aggregation tools have their own
+# end-to-end suite in test_tools_aggregations.py.)
 
 
 async def test_search_panels_success(mcp_client: Client) -> None:

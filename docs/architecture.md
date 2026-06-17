@@ -88,7 +88,7 @@ well under the limit.
            │  envelope.py      run_mcp_tool(), error classification     │
            │  next_commands.py ready-to-call {tool, arguments} chains   │
            │  schemas.py       typed per-tool JSON output schemas       │
-           │  tools/           discovery, panels, genes  (7 MCP tools)  │
+           │  tools/        panels, genes, aggregations, discovery (9)  │
            └──────────────────────────────────────────────────────────┘
                                   |
         ┌─────────────────────────┴─────────────────────────┐
@@ -134,8 +134,12 @@ well under the limit.
      classification and a base `_meta` block.
    - `next_commands.py` — builds the `_meta.next_commands` ready-to-call chains.
    - `schemas.py` — typed per-tool JSON output schemas.
-   - `tools/` — the 7 MCP tools grouped by concern (`panels`, `genes`,
-     `discovery`).
+   - `tools/` — the 9 MCP tools grouped by concern (`panels`, `genes`,
+     `aggregations`, `discovery`).
+   - `services/aggregations.py` — free functions (`compare_panels`,
+     `panels_for_genes`) that compose the **public** service methods into
+     higher-order, token-saving views; the line-tight `panelapp_service.py` stays
+     frozen and all fan-out rides its cache + concurrency-capped client.
 
 4. **Server** (`panelapp_link/server_manager.py`, `server.py`, `mcp_server.py`)
    - `server_manager.py` — `UnifiedServerManager`, the single entry point for the
@@ -154,10 +158,12 @@ well under the limit.
 | Tool | API calls | Notes |
 |------|-----------|-------|
 | `search_panels` | cached `GET /panels/` (per region) | filtered in memory; signed-off merged from cached `GET /panels/signedoff/` |
-| `get_panel` | `GET /panels/{id}/` | single region; merges signed-off metadata |
+| `get_panel` | `GET /panels/{id}/` | single region; merges signed-off metadata; adds `confidence_counts` (per-type traffic-light tallies) in `standard`/`full` |
 | `get_panel_genes` | `GET /panels/{id}/` | selects `genes[]` / `regions[]` / `strs[]`, filters by `min_confidence` |
 | `get_gene_panels` | `GET /genes/?entity_name=SYMBOL` (per region) | each result carries its full `panel` object |
 | `resolve_gene` | `GET /genes/?entity_name=SYMBOL` (per region) | rolls the gene identity up across regions |
+| `compare_panels` | cached `GET /panels/{id}/` (one per ref) | diffs 2–5 panels' genes (`shared` / `only_in` / `confidence_deltas`); concrete regions only |
+| `get_panels_for_genes` | `GET /genes/?entity_name=SYMBOL` (per gene, per region) | batch membership ≤ 20 genes; per-symbol `not_found` isolation; semaphore-capped fan-out |
 | `get_server_capabilities` | none | static capabilities + live source/cache info |
 | `get_panelapp_diagnostics` | none | live sources, cache TTL, and cache stats |
 
@@ -232,10 +238,17 @@ Three cooperating layers (`panelapp_link/observability/`), so you can see the
   the latter a child of the former, so one MCP call is one trace correlated by
   `request_id`. Instrumented with the OTel **API** (a no-op until an operator
   configures an SDK + exporter — the standard library-instrumentation pattern).
+  `setup_tracing()` is the opt-in bootstrap: with the `otel` extra installed and
+  `PANELAPP_LINK_OTEL__ENABLED=true`, it installs an OTLP `TracerProvider` on
+  startup (both transports). It degrades to a no-op when the extra is absent, and
+  the optional console exporter is stderr-only and suppressed under stdio so it
+  can never corrupt the JSON-RPC channel.
 
 The envelope (`run_mcp_tool`) is the single choke point that opens the telemetry
 scope + trace span, records RED metrics, and folds the cache/upstream block into
-`_meta` for every tool — success or error.
+`_meta` for every tool — success or error. `minimal` mode sheds the heaviest
+breadcrumbs (the `upstream` timing and the short citation) and keeps a single
+`next_commands` step, for sweep / agent-loop workloads.
 
 ## Politeness & rate limiting
 

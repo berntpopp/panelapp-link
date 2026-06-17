@@ -1,6 +1,6 @@
 # PanelApp-Link Usage
 
-PanelApp-Link exposes 7 read-only MCP tools over a **live** view of **both**
+PanelApp-Link exposes 9 read-only MCP tools over a **live** view of **both**
 PanelApp regions — Genomics England PanelApp (UK) and PanelApp Australia. It
 queries the public REST APIs per request (with an in-memory cache), so results
 reflect the current upstream data; there is no build step. This guide covers the
@@ -45,7 +45,10 @@ upstream data.
    counts, signed-off version/date). Paginated with a `truncated.next_cursor`.
 2. **Open one panel.** `get_panel(panel_id, region)` returns the panel detail plus
    an entity-count breakdown (genes / regions / strs). `region` is `uk` or
-   `australia` here — not `both`.
+   `australia` here — not `both`. In `standard`/`full` mode the panel also carries
+   `confidence_counts` — per-entity-type traffic-light tallies, e.g.
+   `{"gene": {"green": 42, "amber": 9, "red": 3}}` — so you can read the
+   green/amber/red split without listing every entity.
 3. **List its entities.** `get_panel_genes(panel_id, region, entity_type,
    min_confidence, limit, cursor)` returns the panel's entities. `entity_type` is
    `gene` (default), `region`, `str`, or `all`; filter with `min_confidence` to
@@ -61,6 +64,36 @@ upstream data.
    `GenePanelHit` rows (region, panel id/name, version, confidence label/level,
    mode of inheritance), grouped and sorted by confidence so the strongest panels
    surface first.
+
+### Aggregation / batch
+
+These two tools fan out server-side so an agent does not have to pull and diff
+large gene lists in its own context.
+
+1. **Compare panels.** `compare_panels(panels=[{panel_id, region}, ...],
+   min_confidence, response_mode)` diffs the genes of **2–5** panels and returns
+   `shared`, `only_in` (genes unique to each `panel_id@region` key),
+   `confidence_deltas` (per-panel label for genes that differ), and a `summary`
+   (`n_shared`, `n_union`). Each ref needs a **concrete** region (`uk` or
+   `australia`) — `both` is rejected. Example:
+
+   ```json
+   compare_panels(panels=[{"panel_id": 283, "region": "uk"},
+                          {"panel_id": 487, "region": "uk"}])
+   ```
+
+2. **Panels for many genes.** `get_panels_for_genes(gene_symbols=[...], region,
+   min_confidence, response_mode)` returns, per gene, its `panel_count`,
+   `max_confidence_label`, and the panels it appears on. Unknown symbols collect
+   in `not_found`; the call is capped at 20 symbols per request
+   (`PANELAPP_LINK_DATA__GENE_BATCH_CAP`), and over-cap input is reported in a
+   `truncated` block. Operational errors (rate-limit / upstream) fail the whole
+   batch so it can be retried. Example:
+
+   ```json
+   get_panels_for_genes(gene_symbols=["PKD1", "PKD2", "GANAB"],
+                        min_confidence="green")
+   ```
 
 ## `response_mode` guidance
 
@@ -78,9 +111,13 @@ guessing — present on **error** envelopes too (e.g. a `not_found` from
 `get_gene_panels` hands back `resolve_gene` with the same query). Every `_meta`
 also carries a `request_id` and server-side `elapsed_ms` for tracing.
 
-To save tokens, `minimal`/`compact` replace the full citation with a cacheable
+To save tokens, `compact`/`standard` replace the full citation with a cacheable
 `_meta.citation_ref = "panelapp://citation"` plus a one-line
-`_meta.citation_short` attribution stub; `standard`/`full` keep the full citation.
+`_meta.citation_short` attribution stub; `full` keeps the verbatim citation.
+**`minimal`** is leaner still: it is built for sweep / agent-loop workloads, so it
+keeps only `citation_ref` (dropping `citation_short`), drops the per-region
+`upstream` / `upstream_ms` timing breadcrumbs, and trims `next_commands` to the
+single highest-value step.
 
 ## Confidence reading
 
@@ -111,6 +148,21 @@ instead; read that resource once and reuse the string:
 PanelApp content is provided by Genomics England and PanelApp Australia under
 their respective terms; this server is for research use only and is not clinical
 decision support.
+
+## Observability & configuration
+
+Every `_meta` carries a `request_id` and server-side `elapsed_ms`; non-minimal
+modes also add per-call `cache` (hit / miss / coalesced / partial) and per-region
+`upstream` timing breadcrumbs. Process-wide RED metrics are exposed at
+`GET /metrics` (Prometheus) and via `get_panelapp_diagnostics`.
+
+OpenTelemetry tracing is **opt-in** and a no-op by default. Install the extra
+(`uv sync --extra otel`, or `pip install 'panelapp-link[otel]'`) and set
+`PANELAPP_LINK_OTEL__ENABLED=true` to install an OTLP exporter on startup
+(configure the endpoint with the standard `OTEL_EXPORTER_OTLP_ENDPOINT`). The
+console exporter (`PANELAPP_LINK_OTEL__CONSOLE=true`) writes to stderr only and is
+suppressed under the stdio transport, so it can never corrupt the MCP JSON-RPC
+channel. Tune the batch cap with `PANELAPP_LINK_DATA__GENE_BATCH_CAP` (default 20).
 
 ## Resources
 

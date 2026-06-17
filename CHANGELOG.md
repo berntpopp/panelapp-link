@@ -5,6 +5,50 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - Unreleased
+
+### Added
+
+- **`compare_panels`** — diff the genes of **2–5** panels server-side. Returns
+  `shared`, `only_in` (genes unique per `panel_id@region`), `confidence_deltas`
+  (per-panel label for differing genes), and a `summary` (`n_shared`, `n_union`).
+  Each ref needs a concrete region (`uk`/`australia`); `both` is rejected.
+- **`get_panels_for_genes`** — batch gene→panel membership for up to 20 symbols in
+  one call (per gene: `panel_count`, `max_confidence_label`, panels). Unknown
+  symbols collect in `not_found`; over-cap input is truncated. The cap is
+  configurable via `PANELAPP_LINK_DATA__GENE_BATCH_CAP` (default 20). Fan-out
+  rides the shared cache + concurrency semaphore for upstream politeness.
+- **`confidence_counts`** on panel detail (`get_panel` in `standard`/`full`) — a
+  per-entity-type traffic-light tally, e.g. `{"gene": {"green": N, "amber": N,
+  "red": N}}`. Additive: `entity_counts` is unchanged (still integer totals).
+- **Opt-in OpenTelemetry OTLP tracing.** `setup_tracing()` installs an OTLP
+  `TracerProvider` on startup when `PANELAPP_LINK_OTEL__ENABLED=true` and the new
+  `otel` extra is installed (`pip install 'panelapp-link[otel]'`). No-op
+  otherwise; the optional console exporter is stderr-only and suppressed under the
+  stdio transport so it can never corrupt the MCP JSON-RPC channel.
+- The hosted surface is now **9 read-only tools** (advertised in capabilities and
+  `panelapp://usage`).
+
+### Changed
+
+- **Leaner `minimal` mode `_meta`** for sweep / agent-loop workloads: drops the
+  per-region `upstream` / `upstream_ms` timing and the redundant `citation_short`
+  (the cacheable `citation_ref` stub still rides), and trims `next_commands` to the
+  single highest-value step.
+- **Trimmed per-tool descriptions** (`search_panels`, `get_panel`,
+  `get_panel_genes`, `get_gene_panels`) to cut the per-request token tax; the full
+  workflow guidance lives in `get_server_capabilities` and `panelapp://usage`.
+- `resolve_gene` prose now names the real `max_confidence_label` field instead of
+  the prose "strongest confidence".
+
+### Fixed
+
+- **M1 — full-mode panel count fields.** `full` mode leaked the upstream
+  `number_of_genes` / `number_of_regions` / `number_of_strs` names while every
+  other mode used `n_genes` / `n_regions` / `n_strs`, so consumers broke when
+  widening verbosity. The shaper now emits `n_*` in **all** modes; the shared
+  count fields are mode-invariant.
+
 ## [0.2.0] - Unreleased
 
 ### Changed
