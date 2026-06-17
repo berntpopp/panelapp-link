@@ -340,3 +340,25 @@ def test_cursor_roundtrip_unpadded() -> None:
 
     for offset in (0, 1, 7, 123, 4096):
         assert _decode_cursor(_encode_cursor(offset)) == offset
+
+
+# --- B-2: word-boundary search filtering + relevance ranking ---------------
+
+
+async def test_search_panels_word_prefix_not_substring(live_service: PanelAppService) -> None:
+    # "porphyria" is a whole word in "Acute intermittent porphyria".
+    hit = await live_service.search_panels(query="porphyria", region="uk")
+    assert hit["total"] >= 1
+    # "orphyr" is only a mid-word substring -> must NOT match under word-prefix rules.
+    miss = await live_service.search_panels(query="orphyr", region="uk")
+    assert miss["total"] == 0
+
+
+async def test_search_panels_ranks_results_by_relevance(live_service: PanelAppService) -> None:
+    from panelapp_link.services import _live_helpers as helpers
+
+    out = await live_service.search_panels(query="acute", region="uk", limit=50)
+    scores = [helpers.panel_match_score(p, "acute") for p in out["panels"]]
+    # rank_panels must return scores in non-increasing order.
+    assert scores == sorted(scores, reverse=True)
+    assert scores and scores[0] > 0
