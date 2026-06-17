@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Protocol
 
-from panelapp_link.exceptions import InvalidInputError
+from panelapp_link.exceptions import InvalidInputError, NotFoundError
 
 _MIN_PANELS = 2
 _MAX_PANELS = 5
@@ -29,6 +29,14 @@ class _Service(Protocol):
         min_confidence: str | None = ...,
         response_mode: str = ...,
         cursor: str | None = ...,
+    ) -> dict[str, Any]: ...
+    async def get_gene_panels(
+        self,
+        gene_symbol: str | None = ...,
+        hgnc_id: str | None = ...,
+        region: str = ...,
+        min_confidence: str | None = ...,
+        response_mode: str = ...,
     ) -> dict[str, Any]: ...
 
 
@@ -149,4 +157,64 @@ async def compare_panels(
             for s in shared
             if len({by_symbol[s].get(k) for k in keys}) > 1
         ]
+    return out
+
+
+async def panels_for_genes(
+    svc: _Service,
+    gene_symbols: list[str],
+    *,
+    region: str = "both",
+    min_confidence: str | None = None,
+    response_mode: str = "compact",
+    cap: int = 20,
+) -> dict[str, Any]:
+    """Batch gene->panel membership with per-symbol NotFound isolation.
+
+    Unknown symbols collect into ``not_found``; operational errors (download /
+    rate-limit) propagate and fail the whole call (retryable envelope upstream).
+    """
+    cleaned = [s.strip().upper() for s in gene_symbols if s and s.strip()]
+    deduped = list(dict.fromkeys(cleaned))  # order-preserving unique
+    if not deduped:
+        raise InvalidInputError("Provide at least one gene_symbol.", field="gene_symbols")
+    processed = deduped[:cap]
+
+    async def _one(symbol: str) -> tuple[str, dict[str, Any] | None]:
+        try:
+            res = await svc.get_gene_panels(
+                gene_symbol=symbol,
+                region=region,
+                min_confidence=min_confidence,
+                response_mode=response_mode,
+            )
+            return symbol, res
+        except NotFoundError:
+            return symbol, None
+
+    # DownloadError / RateLimitError propagate out of gather -> envelope fails.
+    results = await asyncio.gather(*(_one(s) for s in processed))
+
+    genes: dict[str, Any] = {}
+    not_found: list[str] = []
+    for symbol, res in results:
+        if res is None:
+            not_found.append(symbol)
+            continue
+        gene = res.get("gene") or {}
+        entry: dict[str, Any] = {
+            "panel_count": gene.get("panel_count", 0),
+            "max_confidence_label": gene.get("max_confidence_label"),
+        }
+        if response_mode != "minimal":
+            entry["panels"] = res.get("panels", [])
+        genes[symbol] = entry
+
+    out: dict[str, Any] = {"genes": genes, "not_found": not_found}
+    if len(deduped) > cap:
+        out["truncated"] = {
+            "requested": len(deduped),
+            "processed": cap,
+            "hint": f"cap is {cap} symbols per call; resubmit the remaining {len(deduped) - cap}.",
+        }
     return out
