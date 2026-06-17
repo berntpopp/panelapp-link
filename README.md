@@ -6,6 +6,10 @@ PanelApp Australia that answers panel/gene questions across either or both
 regions, querying the public REST APIs per request with an in-memory cache.
 
 A drop-in sibling of the `*-link` MCP fleet (e.g. `gencc-link`, `hgnc-link`).
+The server identity is `panelapp-link` (`serverInfo.name`), and its canonical
+gateway **namespace token** is `panelapp`: leaf tools stay unprefixed here and
+the aggregator prefixes them at mount time, so `search_panels` is surfaced as
+`panelapp_search_panels` behind the GeneFoundry router.
 
 > Research use only. **Not** for diagnosis, treatment, triage, patient
 > management, or clinical decision support.
@@ -133,10 +137,12 @@ block.
 | `get_server_capabilities` | Tool inventory, confidence vocab, entity types, regions, response modes, live sources |
 | `get_panelapp_diagnostics` | Live sources, cache TTL, and in-memory cache stats |
 
-Tools whose payloads vary accept `response_mode`: `minimal` | `compact`
-(default) | `standard` | `full`, and the data tools accept `region`
-(`uk` | `australia` | `both`). See [`docs/usage.md`](docs/usage.md) for the
-canonical workflows and the citation contract.
+Tool names are unprefixed `verb_noun` (canonical verbs only); the gateway adds
+the `panelapp` namespace at mount time (e.g. `search_panels` ->
+`panelapp_search_panels`). Tools whose payloads vary accept `response_mode`:
+`minimal` | `compact` (default) | `standard` | `full`, and the data tools accept
+`region` (`uk` | `australia` | `both`). See [`docs/usage.md`](docs/usage.md) for
+the canonical workflows and the citation contract.
 
 ## Architecture
 
