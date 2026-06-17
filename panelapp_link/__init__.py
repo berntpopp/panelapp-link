@@ -8,6 +8,6 @@ try:
     # capabilities/diagnostics server_version (also read from package metadata).
     __version__ = version("panelapp-link")
 except PackageNotFoundError:  # running from a source tree that isn't installed
-    __version__ = "0.1.0"
+    __version__ = "0.2.0"
 
 __author__ = "PanelApp-Link Development Team"
