@@ -87,6 +87,22 @@ def after_get_gene_panels(panels: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return nexts[:_MAX_NEXT_COMMANDS]
 
 
+def after_compare_panels(panel_refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """After a comparison: drill into each compared panel's genes."""
+    nexts = [
+        cmd("get_panel_genes", panel_id=r.get("panel_id"), region=r.get("region"))
+        for r in panel_refs
+        if r.get("panel_id") is not None and r.get("region") in ("uk", "australia")
+    ]
+    return nexts[:_MAX_NEXT_COMMANDS]
+
+
+def after_panels_for_genes(genes: dict[str, Any]) -> list[dict[str, Any]]:
+    """After a batch lookup: list each found gene's full panel footprint."""
+    nexts = [cmd("get_gene_panels", gene_symbol=sym) for sym in genes]
+    return nexts[:_MAX_NEXT_COMMANDS]
+
+
 def recovery_commands(
     tool: str, error_code: str, arguments: dict[str, Any], field: str | None
 ) -> list[dict[str, Any]]:

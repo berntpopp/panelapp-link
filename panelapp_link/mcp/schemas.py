@@ -111,6 +111,18 @@ GET_GENE_PANELS_SCHEMA = tool_output_schema(
     gene=_OBJ, count=_INT, total=_INT, panels=_OBJ_ARRAY, truncated=_TRUNCATION
 )
 RESOLVE_GENE_SCHEMA = tool_output_schema(query=_STR, gene=_OBJ_OR_NULL, matches=_OBJ_ARRAY)
+COMPARE_PANELS_SCHEMA = tool_output_schema(
+    panels=_OBJ_ARRAY,
+    shared=_ARRAY,
+    only_in=_OBJ,
+    confidence_deltas=_OBJ_ARRAY,
+    summary=_OBJ,
+)
+GET_PANELS_FOR_GENES_SCHEMA = tool_output_schema(
+    genes=_OBJ,
+    not_found=_ARRAY,
+    truncated=_TRUNCATION,
+)
 CAPABILITIES_SCHEMA = tool_output_schema(
     server=_STR,
     server_version=_STR,
