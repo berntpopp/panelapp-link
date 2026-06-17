@@ -178,6 +178,18 @@ class TestErrorNextCommands:
             {"tool": "search_panels", "arguments": {"query": "ZZZ"}}
         ]
 
+    async def test_not_found_get_panel_omits_empty_search_recovery(self) -> None:
+        # B-3: a bad panel_id has nothing to search; the slow-path
+        # search_panels(query="") nudge is gone, so no next_commands are emitted.
+        for tool in ("get_panel", "get_panel_genes"):
+            out = await run_mcp_tool(
+                tool,
+                _raiser(NotFoundError("nope")),
+                context=McpErrorContext(tool, arguments={"panel_id": 999, "region": "uk"}),
+            )
+            assert "next_commands" not in out["_meta"]
+            assert out["recovery_action"] == "switch_tool"
+
     async def test_invalid_input_recovery_to_capabilities(self) -> None:
         out = await run_mcp_tool(
             "get_panel_genes",

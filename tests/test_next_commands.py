@@ -105,11 +105,12 @@ class TestAfterGetPanel:
 
 
 class TestRecoveryCommands:
-    def test_not_found_get_panel(self) -> None:
-        out = nc.recovery_commands(
-            "get_panel", "not_found", {"panel_id": 999, "region": "uk"}, None
-        )
-        assert out == [{"tool": "search_panels", "arguments": {"query": ""}}]
+    def test_not_found_panel_tools_emit_no_empty_search(self) -> None:
+        # A bad panel_id has no name to search, and search_panels(query="") triggers
+        # the heavy full-list pull -- so neither panel tool offers a breadcrumb.
+        for tool in ("get_panel", "get_panel_genes"):
+            out = nc.recovery_commands(tool, "not_found", {"panel_id": 999, "region": "uk"}, None)
+            assert out == []
 
     def test_not_found_resolve_gene(self) -> None:
         out = nc.recovery_commands("resolve_gene", "not_found", {"query": "ZZZ"}, None)

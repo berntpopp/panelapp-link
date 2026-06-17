@@ -99,12 +99,12 @@ def recovery_commands(
     gene_in = arguments.get("hgnc_id") or arguments.get("gene_symbol") or arguments.get("query")
     nexts: list[dict[str, Any]] = []
     if error_code == "not_found":
-        if tool in ("get_panel", "get_panel_genes"):
-            nexts = [cmd("search_panels", query="")]
-        elif tool == "resolve_gene" and gene_in:
+        if tool == "resolve_gene" and gene_in:
             nexts = [cmd("search_panels", query=gene_in)]
         elif tool == "get_gene_panels" and gene_in:
             nexts = [cmd("resolve_gene", query=gene_in)]
+        # get_panel / get_panel_genes: a bad panel_id has nothing to search for, and
+        # search_panels(query="") triggers the heavy full-list pull -- offer nothing.
     elif error_code == "invalid_input":
         nexts = [cmd("get_server_capabilities")]
     return nexts[:_MAX_NEXT_COMMANDS]
