@@ -362,3 +362,20 @@ async def test_search_panels_ranks_results_by_relevance(live_service: PanelAppSe
     # rank_panels must return scores in non-increasing order.
     assert scores == sorted(scores, reverse=True)
     assert scores and scores[0] > 0
+
+
+# --- WS-E: prewarm warms the cache so the first search is a hit ------------
+
+
+async def test_prewarm_populates_cache(live_service: PanelAppService) -> None:
+    # Cold cache: nothing stored yet.
+    assert live_service._cache.stats()["entries"] == 0
+    await live_service.prewarm()
+    # Prewarm fetched the heavy panel + signed-off lists for both regions.
+    warmed = live_service._cache.stats()["entries"]
+    assert warmed > 0
+    # A subsequent search is served entirely from the prewarmed cache -- no new
+    # upstream fetches, so the cache-entry count does not grow.
+    out = await live_service.search_panels(query="acute", region="uk")
+    assert out["total"] >= 1
+    assert live_service._cache.stats()["entries"] == warmed
