@@ -92,12 +92,15 @@ def register_aggregation_tools(mcp: FastMCP) -> None:
         response_mode: _MODE = "compact",
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
+            from panelapp_link.config import settings
+
             payload = await aggregations.panels_for_genes(
                 get_panelapp_service(),
                 gene_symbols,
                 region=region,
                 min_confidence=min_confidence,
                 response_mode=response_mode,
+                cap=settings.data.gene_batch_cap,
             )
             payload["_meta"] = {"next_commands": after_panels_for_genes(payload.get("genes", {}))}
             return payload
