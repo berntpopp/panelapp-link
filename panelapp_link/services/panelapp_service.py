@@ -249,10 +249,13 @@ class PanelAppService:
         """Search panels by name/disorders/disease group, merged across regions.
 
         Fetches the (cached) full panel list per region and filters it in memory
-        (case-insensitive substring over name + relevant_disorders + disease_group
-        + disease_sub_group; an empty query returns all). Returns
-        ``{"query","count","total","panels":[...],"truncated"?}``. Panels are
-        deduped by ``(region, panel_id)``; paging is over the deduped set.
+        by per-token word-prefix match over name + relevant_disorders +
+        disease_group + disease_sub_group (so ``renal`` excludes ``adrenal``; an
+        empty query returns all). Results are ranked by relevance (name >
+        disorders > disease group, then name/region); an empty query preserves
+        alphabetical order. Returns ``{"query","count","total","panels":[...],
+        "truncated"?}``. Panels are deduped by ``(region, panel_id)``; paging is
+        over the deduped set.
         """
         if cursor is not None:
             offset = _decode_cursor(cursor)
@@ -281,7 +284,7 @@ class PanelAppService:
                 seen.add(key)
                 normalized.append(shaping.normalize_panel(panel, region_key, signed.get(pid_int)))
 
-        normalized.sort(key=lambda p: ((p.get("name") or "").lower(), p.get("region") or ""))
+        normalized = helpers.rank_panels(normalized, needle)
         total = len(normalized)
         page = normalized[offset : offset + limit]
         payload: dict[str, Any] = {

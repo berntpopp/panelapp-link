@@ -79,13 +79,20 @@ class TestAfterSearchPanels:
 
 
 class TestAfterResolveGene:
-    def test_prefers_hgnc_id(self) -> None:
-        out = nc.after_resolve_gene({"gene_symbol": "BRCA1", "hgnc_id": "HGNC:1100"})
-        assert out == [{"tool": "get_gene_panels", "arguments": {"hgnc_id": "HGNC:1100"}}]
+    def test_emits_gene_symbol_even_when_hgnc_present(self) -> None:
+        # gene_symbol is the query key for get_gene_panels; hgnc_id is only a
+        # result filter, so the breadcrumb must pass gene_symbol -- even when an
+        # hgnc_id is also present -- so following it verbatim succeeds.
+        out = nc.after_resolve_gene({"gene_symbol": "PKD1", "hgnc_id": "HGNC:9008"})
+        assert out == [{"tool": "get_gene_panels", "arguments": {"gene_symbol": "PKD1"}}]
 
     def test_falls_back_to_symbol(self) -> None:
         out = nc.after_resolve_gene({"gene_symbol": "BRCA1"})
         assert out == [{"tool": "get_gene_panels", "arguments": {"gene_symbol": "BRCA1"}}]
+
+    def test_empty_without_symbol(self) -> None:
+        # hgnc_id alone cannot drive get_gene_panels, so no breadcrumb is offered.
+        assert nc.after_resolve_gene({"hgnc_id": "HGNC:9008"}) == []
 
     def test_empty_without_identity(self) -> None:
         assert nc.after_resolve_gene({}) == []
@@ -98,11 +105,12 @@ class TestAfterGetPanel:
 
 
 class TestRecoveryCommands:
-    def test_not_found_get_panel(self) -> None:
-        out = nc.recovery_commands(
-            "get_panel", "not_found", {"panel_id": 999, "region": "uk"}, None
-        )
-        assert out == [{"tool": "search_panels", "arguments": {"query": ""}}]
+    def test_not_found_panel_tools_emit_no_empty_search(self) -> None:
+        # A bad panel_id has no name to search, and search_panels(query="") triggers
+        # the heavy full-list pull -- so neither panel tool offers a breadcrumb.
+        for tool in ("get_panel", "get_panel_genes"):
+            out = nc.recovery_commands(tool, "not_found", {"panel_id": 999, "region": "uk"}, None)
+            assert out == []
 
     def test_not_found_resolve_gene(self) -> None:
         out = nc.recovery_commands("resolve_gene", "not_found", {"query": "ZZZ"}, None)

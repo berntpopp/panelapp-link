@@ -49,7 +49,7 @@ PANELAPP_USAGE_NOTES = (
     "australia, not both) and get_panel_genes for its entities. Filter entities "
     "by entity_type (gene | region | str | all) and min_confidence "
     "(green | amber | red). For a gene-centric view use resolve_gene then "
-    "get_gene_panels(gene_symbol=... or hgnc_id=...) to list every panel and "
+    "get_gene_panels(gene_symbol=...) to list every panel and "
     "region the gene appears on, sorted by confidence. region defaults to "
     "'both' (Genomics England UK + PanelApp Australia); pass 'uk' or 'australia' "
     "to scope. response_mode=compact is the default; widen to standard/full for "

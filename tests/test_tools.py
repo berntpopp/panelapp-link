@@ -126,7 +126,21 @@ async def test_resolve_gene_success(mcp_client: Client) -> None:
     assert data["success"] is True
     assert data["gene"]["gene_symbol"] == "AAAS"
     assert {"query", "gene", "matches"} <= set(data)
-    assert data["_meta"]["next_commands"][0]["tool"] == "get_gene_panels"
+    # The breadcrumb must drive get_gene_panels by gene_symbol (the query key),
+    # not hgnc_id -- following it verbatim must succeed.
+    breadcrumb = data["_meta"]["next_commands"][0]
+    assert breadcrumb["tool"] == "get_gene_panels"
+    assert breadcrumb["arguments"] == {"gene_symbol": "AAAS"}
+
+
+async def test_resolve_gene_breadcrumb_is_followable(mcp_client: Client) -> None:
+    """B-1 headline regression: following resolve_gene's own next_commands[0]
+    verbatim into get_gene_panels must return success (contract self-consistent)."""
+    resolved = (await mcp_client.call_tool("resolve_gene", {"query": "AAAS"})).structured_content
+    step = resolved["_meta"]["next_commands"][0]
+    followed = (await mcp_client.call_tool(step["tool"], step["arguments"])).structured_content
+    assert followed["success"] is True
+    assert followed["gene"]["gene_symbol"] == "AAAS"
 
 
 async def test_get_gene_panels_success(mcp_client: Client) -> None:
