@@ -126,8 +126,16 @@ def test_shape_panel_standard_adds_detail() -> None:
 def test_shape_panel_full_returns_full_row() -> None:
     row = _panel_row()
     out = shaping.shape_panel(row, "full")
+    # full keeps every untrimmed key (e.g. raw name_upper / hash_id) ...
     assert "name_upper" in out
-    assert out == row
+    # ... but the shared count fields are normalized to n_* in every mode (M1):
+    # number_of_* never leaks out of the shaper.
+    expected = dict(row)
+    expected["n_genes"] = expected.pop("number_of_genes")
+    expected["n_regions"] = expected.pop("number_of_regions")
+    expected["n_strs"] = expected.pop("number_of_strs")
+    assert out == expected
+    assert not any(k.startswith("number_of_") for k in out)
 
 
 # --- shape_entity ----------------------------------------------------------
