@@ -85,7 +85,12 @@ def create_app() -> FastAPI:
         """Liveness probe. Reports the live backend status (no network call)."""
         from panelapp_link.mcp.capabilities import _data_status
 
-        return {"status": "ok", "version": __version__, "data": _data_status()}
+        return {
+            "status": "ok",
+            "version": __version__,
+            "transport": "streamable-http-stateless",
+            "data": _data_status(),
+        }
 
     @app.get("/metrics")
     async def metrics() -> Response:
@@ -145,7 +150,7 @@ class UnifiedServerManager:
 
         fastapi_app = create_app()
         mcp = create_panelapp_mcp()
-        mcp_asgi = mcp.http_app(path=settings.mcp_path)
+        mcp_asgi = mcp.http_app(path=settings.mcp_path, stateless_http=True, json_response=True)
 
         original_lifespan = fastapi_app.router.lifespan_context
 

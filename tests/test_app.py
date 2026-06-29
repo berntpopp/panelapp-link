@@ -79,6 +79,7 @@ def test_health_endpoint_reports_live_status() -> None:
     body = resp.json()
     assert body["status"] == "ok"
     assert "version" in body
+    assert body["transport"] == "streamable-http-stateless"
     # The live backend reports its mode + sources without any network call.
     assert body["data"]["mode"] == "live"
     assert "uk" in body["data"]["sources"]
