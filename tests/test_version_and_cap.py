@@ -9,8 +9,8 @@ from panelapp_link.mcp.facade import create_panelapp_mcp
 from panelapp_link.mcp.service_adapters import reset_panelapp_service, set_service_for_testing
 
 
-def test_server_version_is_0_3_0() -> None:
-    assert server_version() == "0.3.0"
+def test_server_version_is_0_3_1() -> None:
+    assert server_version() == "0.3.1"
 
 
 @pytest.fixture
