@@ -1,4 +1,8 @@
-"""Stateless-tier construction guard (in-process, no server needed)."""
+"""Stateless-tier construction guard (in-process, no server needed).
+
+Asserts that the unified server builds a stateless MCP app with JSON
+responses and mounts it at root (avoiding 307 redirects from /mcp/).
+"""
 
 from __future__ import annotations
 
