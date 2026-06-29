@@ -30,6 +30,12 @@ services:
     cap_drop:
       - ALL
 
+    # Read-only root filesystem; the server is a stateless live-API client (in-process
+    # cache only), so the sole writable path it needs is a size-capped tmpfs for /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+
     pids_limit: 256
     init: true
 
