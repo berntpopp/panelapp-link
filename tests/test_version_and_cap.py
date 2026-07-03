@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from importlib.metadata import version
+
 import pytest
 from fastmcp import Client
 
@@ -9,8 +11,9 @@ from panelapp_link.mcp.facade import create_panelapp_mcp
 from panelapp_link.mcp.service_adapters import reset_panelapp_service, set_service_for_testing
 
 
-def test_server_version_is_0_3_1() -> None:
-    assert server_version() == "0.3.1"
+def test_server_version_matches_package_metadata() -> None:
+    # Single-sourced from package metadata (pyproject); never hardcode the number.
+    assert server_version() == version("panelapp-link")
 
 
 @pytest.fixture

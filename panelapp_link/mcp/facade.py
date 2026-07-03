@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
+from panelapp_link import __version__
 from panelapp_link.config import settings
 from panelapp_link.mcp.capabilities import register_capability_resources
 from panelapp_link.mcp.middleware import InputValidationMiddleware
@@ -16,6 +17,7 @@ def create_panelapp_mcp() -> FastMCP:
     """Build a FastMCP instance for PanelApp-Link with all tools and resources."""
     mcp = FastMCP(
         name="panelapp-link",
+        version=__version__,
         instructions=PANELAPP_SERVER_INSTRUCTIONS,
         mask_error_details=True,
     )
