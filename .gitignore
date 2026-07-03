@@ -19,3 +19,6 @@ data/.build.lock
 data/*.tmp
 .env
 .env.docker
+
+# Claude Code session artifacts (never commit)
+.claude/
