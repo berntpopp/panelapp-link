@@ -143,7 +143,15 @@ class ServerSettings(BaseSettings):
         default=["http://localhost:3000", "http://127.0.0.1:3000"],
         description="Allowed CORS origins",
     )
-    cors_allow_credentials: bool = Field(default=True, description="Allow CORS credentials")
+    cors_allow_credentials: bool = Field(
+        default=False,
+        description=(
+            "Allow CORS credentials. Off by default: this backend is "
+            "unauthenticated and holds no cookies/session, so credentialed CORS "
+            "is meaningless. Enabling it together with a '*' origin is rejected "
+            "at startup."
+        ),
+    )
     cors_allow_methods: list[str] = Field(default=["GET", "POST", "OPTIONS"])
     cors_allow_headers: list[str] = Field(default=["*"])
 

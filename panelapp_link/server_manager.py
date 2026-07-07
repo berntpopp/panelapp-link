@@ -66,15 +66,20 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
 
-    # Never send credentials with a wildcard origin: the browser rejects
-    # `Access-Control-Allow-Credentials: true` paired with `*`, and doing so
-    # would also be unsafe. Disable credentials whenever "*" is in the allowed
-    # origins, regardless of the configured cors_allow_credentials.
-    allow_credentials = settings.cors_allow_credentials and "*" not in settings.cors_origins
+    # Credentials are off by default: this backend is unauthenticated and holds
+    # no cookies/session, so credentialed CORS is meaningless. Fail closed on the
+    # unsafe combination -- credentials + a wildcard origin -- which the browser
+    # rejects anyway and which would broaden exposure if ever configured.
+    if settings.cors_allow_credentials and "*" in settings.cors_origins:
+        raise ValueError(
+            "CORS misconfiguration: cors_allow_credentials=True with a '*' origin "
+            "is invalid and unsafe. Set cors_allow_credentials=False (the default) "
+            "or pin explicit origins."
+        )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=allow_credentials,
+        allow_credentials=settings.cors_allow_credentials,
         allow_methods=settings.cors_allow_methods,
         allow_headers=settings.cors_allow_headers,
     )
