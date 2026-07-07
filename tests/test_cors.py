@@ -32,12 +32,22 @@ def test_cors_credentials_disabled_by_default() -> None:
     assert _cors_kwargs(create_app())["allow_credentials"] is False
 
 
-def test_health_get_still_200_with_methods_preserved() -> None:
-    # Disabling credentials must not disable the GET verb: /health is a GET.
+def test_cors_methods_match_settings_in_installed_middleware() -> None:
+    # Strong check: assert the verb list actually wired into the installed
+    # CORSMiddleware -- not merely what ``settings`` holds. The old assertion
+    # (``"GET" in settings.cors_allow_methods``) passed even if the middleware
+    # were handed a different/empty method list, so it guarded nothing.
+    installed_methods = _cors_kwargs(create_app())["allow_methods"]
+    assert installed_methods == settings.cors_allow_methods
+    assert "GET" in installed_methods  # type: ignore[operator]
+
+
+def test_health_get_still_200() -> None:
+    # Separate behavioural check: disabling credentials must not disable the
+    # GET verb -- ``/health`` is a GET and must keep returning 200.
     client = TestClient(create_app())
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert "GET" in settings.cors_allow_methods
 
 
 def test_startup_guard_rejects_credentials_with_wildcard_origin(
