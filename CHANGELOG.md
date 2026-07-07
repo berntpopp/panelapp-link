@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-07-07
+
+### Security
+
+- **Harden the inbound trust boundary of this unauthenticated backend.** CORS
+  credentials are now **off by default** (`cors_allow_credentials=False`): the
+  backend holds no cookies/session, so credentialed CORS is meaningless, and the
+  app now **fails closed at startup** if credentials are ever enabled together
+  with a `*` origin. The base `docker/docker-compose.yml` now **loopback-binds**
+  the published host port (`127.0.0.1:…`) so copying it to a server never
+  publishes the backend on the public IP past the host firewall; production
+  still fronts the container via the router / reverse-proxy overlays. New guard
+  tests lock both behaviours (`tests/test_cors.py`,
+  `tests/test_docker_compose_loopback.py`); the CORS guard asserts the verb list
+  wired into the installed middleware, not just the settings object.
+
 ## [0.3.2] - 2026-07-03
 
 ### Fixed
