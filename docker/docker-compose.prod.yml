@@ -10,6 +10,9 @@ services:
       PANELAPP_LINK_LOG_LEVEL: INFO
       PANELAPP_LINK_LOG_FORMAT: json
       PANELAPP_LINK_RELOAD: "false"
+      PANELAPP_LINK_ALLOWED_HOSTS: '["localhost","127.0.0.1","::1","panelapp-link.genefoundry.org"]'
+      PANELAPP_LINK_ALLOWED_ORIGINS: '["https://panelapp-link.genefoundry.org"]'
+      PANELAPP_LINK_CORS_ORIGINS: '["https://panelapp-link.genefoundry.org"]'
       PANELAPP_LINK_DATA__CACHE_SIZE: 2000
       PANELAPP_LINK_DATA__CACHE_TTL: 7200
       # Warm the heavy panel lists at boot + keep them warm so search_panels never
@@ -64,7 +67,7 @@ services:
     # Health check for production. The server is a stateless live-API client and
     # is ready to serve almost immediately.
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      test: ["CMD", "curl", "-f", "-H", "Host: localhost", "http://127.0.0.1:8000/health"]
       interval: 20s
       timeout: 5s
       retries: 5

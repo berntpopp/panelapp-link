@@ -126,6 +126,11 @@ class ServerSettings(BaseSettings):
         default="unified", description="Server transport mode"
     )
     mcp_path: str = Field(default="/mcp", description="MCP endpoint path")
+    allowed_hosts: list[str] = Field(
+        default=["localhost", "127.0.0.1", "::1"],
+        description="Exact HTTP Host allowlist",
+    )
+    allowed_origins: list[str] = Field(default=[], description="Exact HTTP Origin allowlist")
     mcp_rate_limit_per_minute: int = Field(
         default=0,
         ge=0,
@@ -174,6 +179,13 @@ class ServerSettings(BaseSettings):
     @classmethod
     def _validate_mcp_path(cls, v: str) -> str:
         return v if v.startswith("/") else f"/{v}"
+
+    @field_validator("allowed_hosts", "allowed_origins")
+    @classmethod
+    def _reject_allowlist_wildcards(cls, values: list[str]) -> list[str]:
+        if any(character in entry for entry in values for character in "*?[]"):
+            raise ValueError("wildcard entries are not permitted in HTTP allowlists")
+        return values
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -175,6 +175,8 @@ config uses a double underscore) and an optional `.env` file. Copy
 | `PANELAPP_LINK_PORT` | `8000` | Server port |
 | `PANELAPP_LINK_TRANSPORT` | `unified` | `unified` \| `http` \| `stdio` |
 | `PANELAPP_LINK_MCP_PATH` | `/mcp` | MCP endpoint path |
+| `PANELAPP_LINK_ALLOWED_HOSTS` | `["localhost","127.0.0.1","::1"]` | Exact HTTP Host allowlist as JSON; wildcards are rejected |
+| `PANELAPP_LINK_ALLOWED_ORIGINS` | `[]` | Exact browser Origin allowlist as JSON; absent Origin remains allowed |
 | `PANELAPP_LINK_LOG_LEVEL` | `INFO` | Logging level |
 | `PANELAPP_LINK_LOG_FORMAT` | `console` | `console` or `json` |
 | `PANELAPP_LINK_DATA__UK_API_URL` | `…genomicsengland.co.uk/api/v1` | UK PanelApp API base |
@@ -185,6 +187,12 @@ config uses a double underscore) and an optional `.env` file. Copy
 | `PANELAPP_LINK_DATA__USER_AGENT` | `PanelApp-Link/<version> …` | User-Agent sent to the PanelApp APIs |
 | `PANELAPP_LINK_DATA__CACHE_SIZE` | `512` | In-memory cache entries (0 disables) |
 | `PANELAPP_LINK_DATA__CACHE_TTL` | `21600` | In-memory cache TTL in seconds (default 6h) |
+
+Host and Origin validation is strict on every HTTP route. Add reverse-proxy
+hostnames as exact entries in `PANELAPP_LINK_ALLOWED_HOSTS`. Browser deployments
+must configure the same exact origins in both `PANELAPP_LINK_ALLOWED_ORIGINS`
+and `PANELAPP_LINK_CORS_ORIGINS`; transport validation and browser CORS are
+independent controls.
 
 See [`docs/data-lifecycle.md`](docs/data-lifecycle.md) for data freshness, caching,
 and how each tool maps to the live API endpoints.
