@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-11
+
+### Security
+
+- **Re-enable FastMCP 3.4.4 strict Host/Origin protection (default-deny).** The
+  MCP Streamable-HTTP transport now enforces strict `Host`/`Origin` validation
+  again on FastMCP 3.4.4, with configurable `ALLOWED_HOSTS`/`ALLOWED_ORIGINS`
+  allowlists that default to deny. The previous version-safe guard that
+  pre-empted the FastMCP 3.4.3 host-origin 421 is superseded by first-class
+  allowlist configuration. **Deploy prerequisite:** the proxied public host must
+  be present in the allowlist or the router federation will receive HTTP 421 —
+  see `strato_v6_docker_npm#3`. New guard tests lock the behaviour
+  (`tests/test_host_origin_guard.py`).
+
 ## [0.3.3] - 2026-07-07
 
 ### Security
