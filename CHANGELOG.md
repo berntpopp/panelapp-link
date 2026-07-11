@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-07-11
+
+### Security (defense in depth)
+
+- Guard FastMCP-core not-found reflection: a hostile unknown tool name, unknown/
+  malformed resource URI, or unknown prompt name can no longer reflect the caller-
+  supplied name/URI -- nor its control/zero-width/bidi/NUL code points -- into any
+  caller-visible frame, any framework log record, or (uniquely for this backend,
+  which ships an `otel` extra with `opentelemetry-sdk`) a recording OpenTelemetry
+  span. Layer 1 registry preflight returns a fixed name-free envelope before core
+  dispatch (so no OTel tool span is created); `on_read_resource` re-raises fixed
+  URI-free errors; a protocol-handler backstop severs the `prompts/get` "Unknown
+  prompt: '<name>'" caller echo (`panelapp_link/mcp/middleware.py`); a marker-based
+  scrub filter neutralizes the FastMCP/MCP framework log records that reflect the
+  name/URI at any level -- attached to each source logger, FastMCP's non-propagating
+  Rich handlers, root, and `mcp.shared.session` (`panelapp_link/mcp/log_filters.py`);
+  and a span-exception redactor scrubs a recording span's name, caller-controlled
+  attributes, exception events, and status
+  (`panelapp_link/observability/tracing.py`). All error strings are fixed constants.
+  Research use only.
+
 ## [0.5.1] - 2026-07-11
 
 ### Security (defense in depth)
