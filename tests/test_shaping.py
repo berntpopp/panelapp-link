@@ -119,6 +119,10 @@ def test_shape_panel_standard_adds_detail() -> None:
     for key in ("version_created", "description", "types", "entity_counts"):
         assert key in out
     assert out["entity_counts"] == {"gene": 5}
+    # description is fenced as a v1.1 untrusted_text object, not a bare string
+    # (Response-Envelope Standard v1.1; panelapp_link/services/shaping.py).
+    assert out["description"]["kind"] == "untrusted_text"
+    assert out["description"]["text"] == "An AU-only description"
     # full-only raw key excluded
     assert "name_upper" not in out
 
@@ -134,8 +138,14 @@ def test_shape_panel_full_returns_full_row() -> None:
     expected["n_genes"] = expected.pop("number_of_genes")
     expected["n_regions"] = expected.pop("number_of_regions")
     expected["n_strs"] = expected.pop("number_of_strs")
+    # description is fenced (v1.1 untrusted_text), not the bare raw string --
+    # compare everything else verbatim, then check the fenced field separately.
+    expected_description = expected.pop("description")
+    out_description = out.pop("description")
     assert out == expected
     assert not any(k.startswith("number_of_") for k in out)
+    assert out_description["kind"] == "untrusted_text"
+    assert out_description["text"] == expected_description
 
 
 # --- shape_entity ----------------------------------------------------------
@@ -161,7 +171,11 @@ def test_shape_entity_standard_adds_penetrance_phenotypes_extra() -> None:
     out = shaping.shape_entity(_entity_row(), "standard")
     for key in ("penetrance", "phenotypes", "extra"):
         assert key in out
-    assert out["phenotypes"] == ["Achromatopsia"]
+    # phenotypes is a list of fenced v1.1 untrusted_text objects, one per
+    # curator-prose string, not bare strings.
+    assert len(out["phenotypes"]) == 1
+    assert out["phenotypes"][0]["kind"] == "untrusted_text"
+    assert out["phenotypes"][0]["text"] == "Achromatopsia"
     # full-only fields excluded
     assert "evidence" not in out
     assert "publications" not in out

@@ -131,6 +131,12 @@ def _static_surface() -> dict[str, Any]:
                 "when": "PanelApp rate-limited the request (HTTP 429)",
             },
             {
+                "code": "limit_exceeded",
+                "operational_only": False,
+                "when": "a response exceeds a v1.1 untrusted-text ceiling "
+                "(object count / bytes); narrow the request",
+            },
+            {
                 "code": "internal_error",
                 "operational_only": True,
                 "when": "unexpected server fault",
@@ -141,6 +147,7 @@ def _static_surface() -> dict[str, Any]:
             "not_found",
             "upstream_unavailable",
             "rate_limited",
+            "limit_exceeded",
             "internal_error",
         ],
         "observability": {

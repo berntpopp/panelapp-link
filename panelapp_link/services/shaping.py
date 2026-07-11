@@ -32,6 +32,7 @@ from __future__ import annotations
 from typing import Any
 
 from panelapp_link.constants import CONFIDENCE_RANK, confidence_label
+from panelapp_link.mcp.untrusted_content import UntrustedText, fence_untrusted_text
 from panelapp_link.models.enums import ResponseMode
 
 # gene_data sub-fields packed into region/str ``extra``.
@@ -181,22 +182,104 @@ def normalize_entity(
     }
 
 
-def shape_panel(row: dict[str, Any], mode: ResponseMode) -> dict[str, Any]:
+def _panel_record_id(region: Any, panel_id: Any) -> str:
+    """Region-qualified stable panel id. PanelApp panel ids are **per-region**
+    (the same integer id names different panels in UK vs Australia), so the
+    region is required for a fenced record to be auditable / re-retrievable.
+    """
+    return f"panel:{region}:{panel_id}"
+
+
+def _fence_panel_description(
+    out: dict[str, Any], region: Any, panel_id: Any, fenced: list[UntrustedText] | None
+) -> None:
+    """Reshape ``out["description"]`` from a bare string to a v1.1 ``untrusted_text``
+    object (Response-Envelope Standard v1.1). ``get_panel``/``search_panels`` both
+    route through this one boundary, so a single fence covers ``/panel/description``
+    and ``/panels/*/description``. A present-but-empty/non-string description is
+    normalized to ``None`` so the strict output schema (object|null) stays valid.
+    """
+    if "description" not in out:
+        return
+    raw = out.get("description")
+    if isinstance(raw, str) and raw:
+        obj = fence_untrusted_text(
+            raw, source="panelapp", record_id=_panel_record_id(region, panel_id)
+        )
+        if fenced is not None:
+            fenced.append(obj)
+        out["description"] = obj.model_dump(mode="json")
+    else:
+        out["description"] = None
+
+
+def _fence_panel_types(
+    types: Any, *, region: Any, panel_id: Any, fenced: list[UntrustedText] | None
+) -> Any:
+    """Fence each panel type's curator ``description`` (``/panel/types/*/description``
+    and ``/panels/*/types/*/description``) as its own ``untrusted_text`` object.
+
+    Returns NEW type dicts -- never mutates the cached upstream ``types`` list,
+    which is shared by reference from the in-memory request cache.
+    """
+    if not isinstance(types, list):
+        return types
+    out: list[Any] = []
+    for item in types:
+        if not isinstance(item, dict):
+            out.append(item)
+            continue
+        new_item = dict(item)
+        raw = new_item.get("description")
+        if isinstance(raw, str) and raw:
+            slug = new_item.get("slug") or new_item.get("name") or "type"
+            obj = fence_untrusted_text(
+                raw,
+                source="panelapp",
+                record_id=f"{_panel_record_id(region, panel_id)}#type:{slug}",
+            )
+            if fenced is not None:
+                fenced.append(obj)
+            new_item["description"] = obj.model_dump(mode="json")
+        elif "description" in new_item:
+            new_item["description"] = None
+        out.append(new_item)
+    return out
+
+
+def shape_panel(
+    row: dict[str, Any],
+    mode: ResponseMode,
+    fenced: list[UntrustedText] | None = None,
+) -> dict[str, Any]:
     """Shape a normalized panel row for a response mode.
 
     Args:
         row: A normalized panel dict (``number_of_*`` counts, ``relevant_disorders``,
             ``types``, optional ``entity_counts``).
         mode: One of ``minimal``/``compact``/``standard``/``full``.
+        fenced: Optional accumulator collecting every ``UntrustedText`` object
+            fenced by this call, so the caller can enforce v1.1 response limits
+            (:func:`panelapp_link.mcp.untrusted_content.enforce_untrusted_text_limits`)
+            once over the whole response.
 
     Returns:
-        A JSON-ready dict trimmed to the mode.
+        A JSON-ready dict trimmed to the mode. ``description`` and each
+        ``types[].description`` (standard/full only) are typed ``untrusted_text``
+        objects, never bare strings.
     """
+    region = row.get("region")
+    panel_id = row.get("panel_id")
     if mode == "full":
         full_out = dict(row)
         full_out["n_genes"] = full_out.pop("number_of_genes", 0)
         full_out["n_regions"] = full_out.pop("number_of_regions", 0)
         full_out["n_strs"] = full_out.pop("number_of_strs", 0)
+        _fence_panel_description(full_out, region, panel_id, fenced)
+        if "types" in full_out:
+            full_out["types"] = _fence_panel_types(
+                full_out["types"], region=region, panel_id=panel_id, fenced=fenced
+            )
         return full_out
 
     out: dict[str, Any] = {
@@ -229,23 +312,65 @@ def shape_panel(row: dict[str, Any], mode: ResponseMode) -> dict[str, Any]:
         {
             "version_created": row.get("version_created"),
             "description": row.get("description"),
-            "types": row.get("types", []),
+            "types": _fence_panel_types(
+                row.get("types", []), region=region, panel_id=panel_id, fenced=fenced
+            ),
             "entity_counts": row.get("entity_counts", {}),
             "confidence_counts": row.get("confidence_counts", {}),
         }
     )
+    _fence_panel_description(out, region, panel_id, fenced)
     return out
 
 
-def shape_entity(row: dict[str, Any], mode: ResponseMode) -> dict[str, Any]:
+def _entity_record_id(row: dict[str, Any]) -> str:
+    """``panel:{region}:{id}#gene:{symbol}`` for genes; falls back to
+    ``#entity:{name}`` for region/str entities, which carry no ``gene_symbol``.
+    The region is part of the record id because PanelApp panel ids are per-region.
+    """
+    base = _panel_record_id(row.get("region"), row.get("panel_id"))
+    gene_symbol = row.get("gene_symbol")
+    if gene_symbol:
+        return f"{base}#gene:{gene_symbol}"
+    return f"{base}#entity:{row.get('entity_name')}"
+
+
+def _fence_prose_list(
+    values: list[Any], *, record_id: str, fenced: list[UntrustedText] | None
+) -> list[dict[str, Any]]:
+    """Fence every string element of a curator prose list (phenotypes/evidence)
+    as its own ``untrusted_text`` object -- each list element is independently
+    sourced upstream prose, not one combined field.
+    """
+    out: list[dict[str, Any]] = []
+    for value in values:
+        if not isinstance(value, str) or not value:
+            continue
+        obj = fence_untrusted_text(value, source="panelapp", record_id=record_id)
+        if fenced is not None:
+            fenced.append(obj)
+        out.append(obj.model_dump(mode="json"))
+    return out
+
+
+def shape_entity(
+    row: dict[str, Any],
+    mode: ResponseMode,
+    fenced: list[UntrustedText] | None = None,
+) -> dict[str, Any]:
     """Shape a normalized panel entity row (gene/region/str) for a response mode.
 
     Args:
         row: A normalized entity dict (decoded list columns and ``extra`` object).
         mode: One of ``minimal``/``compact``/``standard``/``full``.
+        fenced: Optional accumulator collecting every ``UntrustedText`` object
+            fenced by this call, so the caller can enforce v1.1 response limits
+            once over the whole (possibly many-entity) response.
 
     Returns:
-        A JSON-ready dict trimmed to the mode.
+        A JSON-ready dict trimmed to the mode. ``phenotypes`` (standard/full)
+        and ``evidence`` (full only) are lists of typed ``untrusted_text``
+        objects, one per curator-prose string, never bare strings.
     """
     out: dict[str, Any] = {
         "entity_name": row.get("entity_name"),
@@ -266,10 +391,13 @@ def shape_entity(row: dict[str, Any], mode: ResponseMode) -> dict[str, Any]:
     if mode == "compact":
         return out
 
+    record_id = _entity_record_id(row)
     out.update(
         {
             "penetrance": row.get("penetrance"),
-            "phenotypes": row.get("phenotypes", []),
+            "phenotypes": _fence_prose_list(
+                row.get("phenotypes", []), record_id=record_id, fenced=fenced
+            ),
             "extra": row.get("extra", {}),
         }
     )
@@ -279,7 +407,9 @@ def shape_entity(row: dict[str, Any], mode: ResponseMode) -> dict[str, Any]:
     # full
     out.update(
         {
-            "evidence": row.get("evidence", []),
+            "evidence": _fence_prose_list(
+                row.get("evidence", []), record_id=record_id, fenced=fenced
+            ),
             "publications": row.get("publications", []),
             "omim": row.get("omim", []),
             "tags": row.get("tags", []),

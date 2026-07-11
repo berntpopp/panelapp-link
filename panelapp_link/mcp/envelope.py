@@ -30,6 +30,7 @@ from panelapp_link.exceptions import (
     RateLimitError,
 )
 from panelapp_link.mcp.next_commands import recovery_commands
+from panelapp_link.mcp.untrusted_content import UntrustedTextLimitError
 from panelapp_link.observability import telemetry, tracing
 from panelapp_link.observability.metrics import get_metrics
 
@@ -105,6 +106,10 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
         return "upstream_unavailable", "Could not reach the PanelApp API. Try again later.", True
     if isinstance(exc, NotFoundError):
         return "not_found", str(exc), False
+    if isinstance(exc, UntrustedTextLimitError):
+        # Response-Envelope v1.1 forbids silent omission on a limit breach; surface
+        # it as an explicit typed limit error, never a generic internal_error.
+        return "limit_exceeded", str(exc), False
     if isinstance(exc, InvalidInputError):
         msg = f"Invalid input -- `{exc.field}`: {exc.message}" if exc.field else exc.message
         return "invalid_input", msg, False
@@ -118,7 +123,7 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
 def _recovery_action(error_code: str) -> str:
     if error_code in {"rate_limited", "upstream_unavailable"}:
         return "retry_backoff"
-    if error_code == "invalid_input":
+    if error_code in {"invalid_input", "limit_exceeded"}:
         return "reformulate_input"
     if error_code == "not_found":
         return "switch_tool"

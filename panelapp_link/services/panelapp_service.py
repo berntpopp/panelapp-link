@@ -34,6 +34,7 @@ from panelapp_link.exceptions import (
     InvalidInputError,
     NotFoundError,
 )
+from panelapp_link.mcp.untrusted_content import UntrustedText, enforce_untrusted_text_limits
 from panelapp_link.models.enums import ENTITY_TYPES, RESPONSE_MODES, ResponseMode
 from panelapp_link.observability.metrics import get_metrics
 from panelapp_link.services import _live_helpers as helpers
@@ -47,6 +48,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MAX_LIMIT = 500
+
+# List/search tools fence several objects per record (panel description + each
+# type description; entity phenotypes + evidence) across up to _MAX_LIMIT
+# records, so they pass a generous ceiling legitimate data never hits.
+_LIST_TOOL_MAX_FENCED_OBJECTS = 10_000
 
 # region argument -> region keys.
 _REGION_MAP: dict[str, list[str]] = {
@@ -287,12 +293,15 @@ class PanelAppService:
         normalized = helpers.rank_panels(normalized, needle)
         total = len(normalized)
         page = normalized[offset : offset + limit]
+        fenced: list[UntrustedText] = []
         payload: dict[str, Any] = {
             "query": q,
             "count": len(page),
             "total": total,
-            "panels": [shaping.shape_panel(r, mode) for r in page],
+            "panels": [shaping.shape_panel(r, mode, fenced) for r in page],
         }
+        # Panels fence description + each type description; list-tool ceiling.
+        enforce_untrusted_text_limits(fenced, max_objects=_LIST_TOOL_MAX_FENCED_OBJECTS)
         trunc = self._truncation(total, limit, offset, len(page))
         if trunc:
             payload["truncated"] = trunc
@@ -322,7 +331,11 @@ class PanelAppService:
         detail = await self._panel_detail(region_key, panel_id)
         signed = await self._signed_off_map(region_key)
         row = shaping.normalize_panel(detail, region_key, signed.get(panel_id))
-        return {"panel": shaping.shape_panel(row, mode)}
+        fenced: list[UntrustedText] = []
+        panel = shaping.shape_panel(row, mode, fenced)
+        # Single-record tool: default ceiling (128) is the real result cap.
+        enforce_untrusted_text_limits(fenced)
+        return {"panel": panel}
 
     async def get_panel_genes(
         self,
@@ -365,14 +378,17 @@ class PanelAppService:
 
         total = len(normalized)
         page = normalized[offset : offset + limit]
+        fenced: list[UntrustedText] = []
         payload: dict[str, Any] = {
             "panel_id": panel_id,
             "region": region_key,
             "entity_type": entity_type,
             "count": len(page),
             "total": total,
-            "entities": [shaping.shape_entity(e, mode) for e in page],
+            "entities": [shaping.shape_entity(e, mode, fenced) for e in page],
         }
+        # Real ceiling: up to _MAX_LIMIT entities/page, each with 2 prose lists.
+        enforce_untrusted_text_limits(fenced, max_objects=_LIST_TOOL_MAX_FENCED_OBJECTS)
         trunc = self._truncation(total, limit, offset, len(page))
         if trunc:
             payload["truncated"] = trunc
