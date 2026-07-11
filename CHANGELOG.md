@@ -5,6 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-11
+
+### BREAKING
+
+- **Curator prose is now fenced as a typed `untrusted_text` object (Response-
+  Envelope Standard v1.1), never a bare string.** These MCP surfaces now emit
+  `{kind: "untrusted_text", text, provenance: {source, record_id, retrieved_at},
+  raw_sha256}` in place of the raw string:
+  - `get_panel` `/panel/description` + `/panel/types/*/description`,
+  - `search_panels` `/panels/*/description` + `/panels/*/types/*/description`
+    (both panel tools route through the shared `shape_panel` boundary),
+  - `get_panel_genes` `/entities/*/phenotypes` + `/entities/*/evidence`
+    (`shape_entity`; each list element fenced as its own object).
+
+  `text` is NFC-normalized with control/zero-width/bidi code points removed
+  (`panelapp_link/mcp/untrusted_content.py`, copied verbatim from the
+  fleet-reference `pubtator-link` fence); `raw_sha256` is the digest of the
+  pre-normalization bytes. `record_id` is **region-qualified** because PanelApp
+  panel ids are per-region: `panel:{region}:{id}` for the panel description,
+  `panel:{region}:{id}#type:{slug}` for a panel type, and
+  `panel:{region}:{id}#gene:{symbol}` (falling back to `#entity:{name}` for
+  region/str entities) for phenotypes/evidence. Standard/full response modes
+  only; minimal/compact are unaffected. `enforce_untrusted_text_limits` guards
+  every response over the whole payload (`get_panel`: default 128 for the single
+  record; `search_panels` + `get_panel_genes`: a generous 10000-object ceiling,
+  since a page of up to 500 records each carrying several fenced prose fields can
+  legitimately exceed the bare 128 default — the 2 MiB/object + 8 MiB/total byte
+  limits remain the DoS floor). A limit breach surfaces as an explicit typed
+  `limit_exceeded` error code (never a generic `internal_error`), advertised in
+  `get_server_capabilities`. This is defense in depth: the router already treats
+  a `kind: untrusted_text` subtree opaque; fencing types upstream prose as data
+  at the source. Research use only; not clinical decision support.
+
 ## [0.4.0] - 2026-07-11
 
 ### Security
