@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from panelapp_link.mcp.untrusted_content import FORBIDDEN_CODEPOINTS
+
 _MAX_NEXT_COMMANDS = 5
 
 
@@ -113,6 +115,11 @@ def recovery_commands(
     Always capped at ``_MAX_NEXT_COMMANDS``.
     """
     gene_in = arguments.get("hgnc_id") or arguments.get("gene_symbol") or arguments.get("query")
+    # A recovery next_command is a ready-to-CALL suggestion; never seed one from a
+    # caller identifier carrying the fence's forbidden code points -- omit it (an
+    # invalid value is dropped, not sanitized+echoed, for a recovery argument).
+    if isinstance(gene_in, str) and any(ord(c) in FORBIDDEN_CODEPOINTS for c in gene_in):
+        gene_in = None
     nexts: list[dict[str, Any]] = []
     if error_code == "not_found":
         if tool == "resolve_gene" and gene_in:

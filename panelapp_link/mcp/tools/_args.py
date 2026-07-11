@@ -32,7 +32,7 @@ def normalize_region(region: str) -> list[str]:
     keys = _REGION_MAP.get(region)
     if keys is None:
         raise InvalidInputError(
-            f"Invalid region {region!r}. Use 'uk', 'australia', or 'both'.",
+            "Invalid region. Use 'uk', 'australia', or 'both'.",
             field="region",
         )
     return list(keys)
@@ -100,7 +100,7 @@ def validate_min_confidence(value: str | None) -> str | None:
         return None
     if value not in CONFIDENCE_RANK:
         raise InvalidInputError(
-            f"Invalid min_confidence {value!r}. Use one of: {', '.join(CONFIDENCE_RANK)}.",
+            f"Invalid min_confidence. Use one of: {', '.join(CONFIDENCE_RANK)}.",
             field="min_confidence",
         )
     return value
@@ -114,7 +114,7 @@ def validate_entity_type(value: str) -> str:
     """
     if value not in ENTITY_TYPES:
         raise InvalidInputError(
-            f"Invalid entity_type {value!r}. Use one of: {', '.join(ENTITY_TYPES)}.",
+            f"Invalid entity_type. Use one of: {', '.join(ENTITY_TYPES)}.",
             field="entity_type",
         )
     return value

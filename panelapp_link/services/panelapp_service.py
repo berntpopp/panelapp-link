@@ -119,7 +119,7 @@ class PanelAppService:
         keys = _REGION_MAP.get(region)
         if keys is None:
             raise InvalidInputError(
-                f"Invalid region {region!r}. Use 'uk', 'australia', or 'both'.",
+                "Invalid region. Use 'uk', 'australia', or 'both'.",
                 field="region",
             )
         return list(keys)
@@ -128,7 +128,7 @@ class PanelAppService:
     def _validate_mode(mode: str) -> ResponseMode:
         if mode not in RESPONSE_MODES:
             raise InvalidInputError(
-                f"Invalid response_mode {mode!r}. Use one of: {', '.join(RESPONSE_MODES)}.",
+                f"Invalid response_mode. Use one of: {', '.join(RESPONSE_MODES)}.",
                 field="response_mode",
             )
         return mode
@@ -137,7 +137,7 @@ class PanelAppService:
     def _validate_entity_type(entity_type: str) -> str:
         if entity_type not in ENTITY_TYPES:
             raise InvalidInputError(
-                f"Invalid entity_type {entity_type!r}. Use one of: {', '.join(ENTITY_TYPES)}.",
+                f"Invalid entity_type. Use one of: {', '.join(ENTITY_TYPES)}.",
                 field="entity_type",
             )
         return entity_type
@@ -150,8 +150,7 @@ class PanelAppService:
         rank = CONFIDENCE_RANK.get(min_confidence)
         if rank is None:
             raise InvalidInputError(
-                f"Invalid min_confidence {min_confidence!r}. Use one of: "
-                f"{', '.join(CONFIDENCE_RANK)}.",
+                f"Invalid min_confidence. Use one of: {', '.join(CONFIDENCE_RANK)}.",
                 field="min_confidence",
             )
         return rank
@@ -522,7 +521,9 @@ class PanelAppService:
                 *(self._signed_off_map(r) for r in _REGION_MAP["both"]),
             )
         except Exception as exc:  # best-effort warm-up; never fatal
-            logger.warning("panelapp prewarm failed: %s", exc)
+            # Log only the exception TYPE -- never str(exc), which can carry
+            # request/upstream detail (M3 no-raw-detail-in-logs invariant).
+            logger.warning("panelapp prewarm failed: %s", exc.__class__.__name__)
 
     async def refresh_panel_lists(self) -> None:
         """Force-refresh the panel + signed-off lists for both regions.
@@ -558,7 +559,8 @@ class PanelAppService:
             try:
                 await self.refresh_panel_lists()
             except Exception as exc:
-                logger.warning("panelapp background refresh failed: %s", exc)
+                # Log only the exception TYPE (M3 no-raw-detail-in-logs invariant).
+                logger.warning("panelapp background refresh failed: %s", exc.__class__.__name__)
 
     async def aclose(self) -> None:
         """Cancel the background refresh task, if any."""

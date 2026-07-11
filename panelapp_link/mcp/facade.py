@@ -7,7 +7,10 @@ from fastmcp import FastMCP
 from panelapp_link import __version__
 from panelapp_link.config import settings
 from panelapp_link.mcp.capabilities import register_capability_resources
-from panelapp_link.mcp.middleware import InputValidationMiddleware
+from panelapp_link.mcp.middleware import (
+    InputValidationMiddleware,
+    install_validation_log_filter,
+)
 from panelapp_link.mcp.rate_limit import RateLimitMiddleware
 from panelapp_link.mcp.resources import PANELAPP_SERVER_INSTRUCTIONS
 from panelapp_link.mcp.tools import register_all_tools
@@ -21,6 +24,9 @@ def create_panelapp_mcp() -> FastMCP:
         instructions=PANELAPP_SERVER_INSTRUCTIONS,
         mask_error_details=True,
     )
+    # Scrub FastMCP's own pre-middleware arg-validation log records (they embed the
+    # caller-chosen argument name + rejected input before our middleware runs).
+    install_validation_log_filter()
     # Rate limiting (when enabled) is outermost so an over-cap call is rejected
     # before any argument validation or upstream work happens.
     if settings.mcp_rate_limit_per_minute > 0:

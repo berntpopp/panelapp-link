@@ -13,9 +13,10 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from pydantic import ValidationError as PydanticValidationError
+from pydantic_core import ErrorDetails
 
 from panelapp_link.constants import (
     CITATION_SHORT,
@@ -30,7 +31,7 @@ from panelapp_link.exceptions import (
     RateLimitError,
 )
 from panelapp_link.mcp.next_commands import recovery_commands
-from panelapp_link.mcp.untrusted_content import UntrustedTextLimitError
+from panelapp_link.mcp.untrusted_content import UntrustedTextLimitError, sanitize_message
 from panelapp_link.observability import telemetry, tracing
 from panelapp_link.observability.metrics import get_metrics
 
@@ -48,6 +49,85 @@ _RECOMMENDED_CITATION = (
 
 # Error codes that are inherently retryable when raised via ``McpToolError``.
 _RETRYABLE_CODES = {"rate_limited", "upstream_unavailable"}
+
+# FIXED, error-code-specific public messages for classified exceptions whose OWN
+# ``str(exc)`` is built from the caller's query/identifier or an upstream value.
+# Code-point stripping is NOT enough for these: injection PROSE
+# ("Ignore all previous instructions ...") survives it, so the caller-visible
+# message must not interpolate that text at all. The raw detail stays only in the
+# server-side exception (never surfaced, never logged verbatim).
+_FIXED_MESSAGES: dict[str, str] = {
+    "not_found": (
+        "The requested PanelApp record was not found. "
+        "Use search_panels or resolve_gene to find a valid identifier."
+    ),
+    "limit_exceeded": (
+        "The response exceeded the untrusted-text size or count limit. "
+        "Re-call with a smaller limit or a lower response_mode."
+    ),
+}
+
+# Fixed, input-free reasons keyed by pydantic error ``type`` -- the pydantic
+# ``msg`` (and the rejected input value) can echo caller prose, so it is never
+# surfaced. Unlisted types fall back through :func:`_pydantic_reason`.
+_PYDANTIC_REASONS: dict[str, str] = {
+    "missing": "This required argument is missing.",
+    "unexpected_keyword_argument": "Unexpected or unknown argument.",
+    "extra_forbidden": "Unexpected or unknown argument.",
+    "literal_error": "Value is not one of the allowed options.",
+    "enum": "Value is not one of the allowed options.",
+}
+
+# Pydantic error types whose ``loc`` IS the caller-chosen (arbitrary) argument
+# name; that name is redacted rather than echoed.
+_UNKNOWN_ARG_TYPES = {"unexpected_keyword_argument", "extra_forbidden"}
+
+
+def _pydantic_reason(err: ErrorDetails) -> str:
+    """Return a FIXED reason for a pydantic arg-validation error.
+
+    Never echoes the pydantic ``msg`` or the rejected input value; both can carry
+    caller prose that survives code-point stripping.
+    """
+    etype = str(err.get("type", ""))
+    if etype in _PYDANTIC_REASONS:
+        return _PYDANTIC_REASONS[etype]
+    if "parsing" in etype or etype.endswith("_type"):
+        return "Wrong type for this argument."
+    if "greater" in etype or "less" in etype or "than" in etype:
+        return "Value is out of the allowed range."
+    if "string" in etype:
+        return "Invalid string value for this argument."
+    return "Invalid value for this argument."
+
+
+def _safe_pydantic_field(err: ErrorDetails) -> str:
+    """Return a safe field name for a pydantic error.
+
+    An unexpected/unknown keyword argument's ``loc`` is the caller-chosen name
+    (arbitrary prose), so it is redacted to a fixed placeholder. A declared-field
+    ``loc`` is server-defined and safe (code-point stripped defensively).
+    """
+    if str(err.get("type", "")) in _UNKNOWN_ARG_TYPES:
+        return "<unknown>"
+    loc = ".".join(str(p) for p in err.get("loc", ())) or "input"
+    return sanitize_message(loc)
+
+
+def _sanitize_tree(value: Any) -> Any:
+    """Recursively strip the fence's forbidden code points from every string leaf.
+
+    The final code-point backstop over a WHOLE error envelope -- message, field,
+    field_errors, and every ``_meta.next_commands[*].arguments.*`` value -- on top
+    of the fixed-message / redaction discipline in :func:`_classify`.
+    """
+    if isinstance(value, str):
+        return sanitize_message(value)
+    if isinstance(value, dict):
+        return {k: _sanitize_tree(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_tree(v) for v in value]
+    return value
 
 
 @dataclass
@@ -97,7 +177,14 @@ def _provenance_meta(response_mode: str | None = None, *, is_error: bool = False
 
 
 def _classify(exc: BaseException) -> tuple[str, str, bool]:
-    """Return (error_code, client_safe_message, retryable)."""
+    """Return (error_code, client_safe_message, retryable).
+
+    Classified exceptions whose ``str(exc)`` is built from the caller's query /
+    identifier or an upstream value NEVER surface that text: a FIXED, error-code
+    message is used instead (see ``_FIXED_MESSAGES``). Server-authored strings
+    (``InvalidInputError``/``McpToolError`` guidance) are surfaced but stripped of
+    forbidden code points by the recursive envelope pass.
+    """
     if isinstance(exc, McpToolError):
         return exc.error_code, exc.message, exc.error_code in _RETRYABLE_CODES
     if isinstance(exc, RateLimitError):
@@ -105,18 +192,21 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
     if isinstance(exc, DownloadError):
         return "upstream_unavailable", "Could not reach the PanelApp API. Try again later.", True
     if isinstance(exc, NotFoundError):
-        return "not_found", str(exc), False
+        # str(exc) embeds the caller's query/identifier -> use the fixed message.
+        return "not_found", _FIXED_MESSAGES["not_found"], False
     if isinstance(exc, UntrustedTextLimitError):
         # Response-Envelope v1.1 forbids silent omission on a limit breach; surface
         # it as an explicit typed limit error, never a generic internal_error.
-        return "limit_exceeded", str(exc), False
+        return "limit_exceeded", _FIXED_MESSAGES["limit_exceeded"], False
     if isinstance(exc, InvalidInputError):
+        # exc.message is server-authored (static guidance; the rejected value is not
+        # interpolated at the raise sites). exc.field is a fixed schema field name.
         msg = f"Invalid input -- `{exc.field}`: {exc.message}" if exc.field else exc.message
         return "invalid_input", msg, False
     if isinstance(exc, PydanticValidationError):
         first = exc.errors()[0]
-        loc = ".".join(str(p) for p in first["loc"]) or "input"
-        return "invalid_input", f"Invalid input -- `{loc}`: {first['msg']}", False
+        field = _safe_pydantic_field(first)
+        return "invalid_input", f"Invalid input -- `{field}`: {_pydantic_reason(first)}", False
     return "internal_error", "An internal error occurred. The request was not completed.", False
 
 
@@ -132,11 +222,13 @@ def _recovery_action(error_code: str) -> str:
 
 def _field_errors(exc: BaseException) -> list[dict[str, str]] | None:
     if isinstance(exc, InvalidInputError) and exc.field:
-        return [{"field": exc.field, "reason": exc.message}]
+        # Both are server-authored; the recursive pass strips code points anyway.
+        return [{"field": sanitize_message(exc.field), "reason": sanitize_message(exc.message)}]
     if isinstance(exc, PydanticValidationError):
+        # Redact an attacker-chosen argument name; map the pydantic type -> a fixed
+        # reason (never echo the pydantic ``msg`` or the rejected input value).
         return [
-            {"field": ".".join(str(p) for p in e["loc"]) or "input", "reason": e["msg"]}
-            for e in exc.errors()
+            {"field": _safe_pydantic_field(e), "reason": _pydantic_reason(e)} for e in exc.errors()
         ]
     return None
 
@@ -150,10 +242,12 @@ def _error_envelope(
 ) -> dict[str, Any]:
     error_code, message, retryable = _classify(exc)
     field_name = getattr(exc, "field", None)
-    if field_name is None and isinstance(exc, PydanticValidationError):
+    if isinstance(field_name, str):
+        field_name = sanitize_message(field_name)
+    elif field_name is None and isinstance(exc, PydanticValidationError):
         errs = exc.errors()
-        if errs and errs[0]["loc"]:
-            field_name = str(errs[0]["loc"][-1])
+        if errs:
+            field_name = _safe_pydantic_field(errs[0])
     meta: dict[str, Any] = {"tool": context.tool_name, **_provenance_meta(is_error=True)}
     meta["request_id"] = request_id
     meta["elapsed_ms"] = elapsed_ms
@@ -171,7 +265,9 @@ def _error_envelope(
     field_errors = _field_errors(exc)
     if field_errors is not None:
         envelope["field_errors"] = field_errors
-    return envelope
+    # Final code-point backstop over every string leaf of the whole error envelope
+    # (message, field_errors, and any next_commands recovery argument).
+    return cast("dict[str, Any]", _sanitize_tree(envelope))
 
 
 def validation_error_envelope(
@@ -189,6 +285,18 @@ def validation_error_envelope(
     ctx = McpErrorContext(tool_name=tool_name, arguments=arguments)
     envelope = _error_envelope(exc, ctx, request_id=uuid.uuid4().hex[:12], elapsed_ms=0.0)
     get_metrics().record_request(tool_name, envelope["error_code"], 0.0)
+    return envelope
+
+
+def arg_validation_failure_envelope(*, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Fixed ``invalid_input`` envelope when arg validation failed without a
+    pydantic cause (a FastMCP ``ValidationError`` whose ``__cause__`` is not a
+    ``pydantic.ValidationError``). No caller detail is available or surfaced.
+    """
+    ctx = McpErrorContext(tool_name=tool_name, arguments=arguments)
+    exc = McpToolError(error_code="invalid_input", message="The tool arguments were invalid.")
+    envelope = _error_envelope(exc, ctx, request_id=uuid.uuid4().hex[:12], elapsed_ms=0.0)
+    get_metrics().record_request(tool_name, "invalid_input", 0.0)
     return envelope
 
 

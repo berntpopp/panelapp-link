@@ -65,7 +65,15 @@ class PanelAppRestClient:
         )
 
     async def _request(self, url: str) -> dict[str, Any]:
-        """GET ``url`` with retries; raise the appropriate typed error on failure."""
+        """GET ``url`` with retries; raise the appropriate typed error on failure.
+
+        Error messages are FIXED and status-keyed: neither the request ``url``
+        (which embeds caller-influenced query text) nor the transport ``str(exc)``
+        nor any upstream response body is interpolated into the raised exception.
+        The HTTP status is a bounded, non-attacker-controlled scalar, so it is the
+        only request-specific detail kept. This keeps caller-influenced prose out
+        of the exception (and therefore out of any log/telemetry sink).
+        """
         last_exc: Exception | None = None
         last_status: int | None = None
         for attempt in range(self._config.max_retries + 1):
@@ -73,36 +81,32 @@ class PanelAppRestClient:
             try:
                 async with self._semaphore:
                     response = await self._client.get(url)
-            except (httpx.TimeoutException, httpx.TransportError) as exc:
-                last_exc = DownloadError(f"PanelApp request to {url} failed: {exc}")
+            except (httpx.TimeoutException, httpx.TransportError):
+                last_exc = DownloadError("PanelApp request failed (network error).")
                 last_status = None
             else:
                 status = response.status_code
                 if status == 403:
-                    raise RateLimitError(
-                        f"PanelApp denied the request (HTTP 403) for {url}.", status_code=403
-                    )
+                    raise RateLimitError("PanelApp denied the request (HTTP 403).", status_code=403)
                 if status == 429:
                     last_exc = RateLimitError(
-                        f"PanelApp rate-limited the request (HTTP 429) for {url}.", status_code=429
+                        "PanelApp rate-limited the request (HTTP 429).", status_code=429
                     )
                     last_status = 429
                     retry_after = _parse_retry_after(response.headers.get("Retry-After"))
                 elif status in _RETRYABLE_STATUS:
                     last_exc = DownloadError(
-                        f"PanelApp returned {status} for {url}.", status_code=status
+                        f"PanelApp returned HTTP {status}.", status_code=status
                     )
                     last_status = status
                 elif status >= 400:
-                    raise DownloadError(
-                        f"PanelApp returned {status} for {url}.", status_code=status
-                    )
+                    raise DownloadError(f"PanelApp returned HTTP {status}.", status_code=status)
                 else:
                     return response.json()  # type: ignore[no-any-return]
             if attempt < self._config.max_retries:
                 await asyncio.sleep(self._retry_delay(attempt, last_status, retry_after))
         if last_exc is None:  # pragma: no cover - defensive; loop always sets last_exc
-            last_exc = DownloadError(f"PanelApp request to {url} failed.", status_code=last_status)
+            last_exc = DownloadError("PanelApp request failed.", status_code=last_status)
         raise last_exc
 
     @staticmethod
