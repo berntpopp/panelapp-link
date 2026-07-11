@@ -9,19 +9,10 @@ from typing import TYPE_CHECKING, Any
 import uvicorn
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastmcp.server.http import HostOriginGuardMiddleware
 
 from panelapp_link import __version__
 from panelapp_link.config import settings
-
-# fastmcp >=3.4.3 defaults http_host_origin_protection on, which returns 421
-# Misdirected Request for any proxied /mcp request whose Host is not localhost
-# (e.g. traffic from the genefoundry-router). NPM already validates the Host
-# via server_name + TLS SNI, so disable the redundant app-layer guard. This is
-# a no-op on fastmcp <3.4.3 (the setting does not exist yet), so it is safe to
-# land before the version bump that would otherwise break federation.
-import fastmcp
-if hasattr(fastmcp.settings, "http_host_origin_protection"):
-    fastmcp.settings.http_host_origin_protection = False
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -92,6 +83,12 @@ def create_app() -> FastAPI:
         allow_credentials=settings.cors_allow_credentials,
         allow_methods=settings.cors_allow_methods,
         allow_headers=settings.cors_allow_headers,
+    )
+    app.add_middleware(
+        HostOriginGuardMiddleware,
+        allowed_hosts=settings.allowed_hosts,
+        allowed_origins=settings.allowed_origins,
+        mode="strict",
     )
 
     @app.get("/health")
@@ -165,7 +162,14 @@ class UnifiedServerManager:
 
         fastapi_app = create_app()
         mcp = create_panelapp_mcp()
-        mcp_asgi = mcp.http_app(path=settings.mcp_path, stateless_http=True, json_response=True)
+        mcp_asgi = mcp.http_app(
+            path=settings.mcp_path,
+            stateless_http=True,
+            json_response=True,
+            host_origin_protection=True,
+            allowed_hosts=settings.allowed_hosts,
+            allowed_origins=settings.allowed_origins,
+        )
 
         original_lifespan = fastapi_app.router.lifespan_context
 

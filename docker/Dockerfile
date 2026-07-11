@@ -68,7 +68,7 @@ EXPOSE 8000
 # It queries the PanelApp REST APIs per request with an in-memory cache, so the
 # server is ready to serve immediately.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -f http://127.0.0.1:8000/health || exit 1
+    CMD curl -f -H 'Host: localhost' http://127.0.0.1:8000/health || exit 1
 
 # entrypoint.sh is a thin passthrough that exec's this CMD.
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
