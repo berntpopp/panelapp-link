@@ -18,13 +18,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from fastmcp.exceptions import NotFoundError as FastMCPNotFoundError
+from fastmcp.exceptions import ResourceError as FastMCPResourceError
 from fastmcp.exceptions import ValidationError as FastMCPValidationError
+from fastmcp.resources.base import ResourceResult
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.tool import ToolResult
 from pydantic import ValidationError as PydanticValidationError
 
 from panelapp_link.mcp.envelope import (
     arg_validation_failure_envelope,
+    unknown_tool_envelope,
     validation_error_envelope,
 )
 
@@ -39,6 +43,11 @@ class InputValidationMiddleware(Middleware):
     ) -> ToolResult:
         try:
             return await call_next(context)
+        except FastMCPNotFoundError:
+            # Unknown/disabled tool: the requested NAME is attacker-controlled and
+            # FastMCP would echo it verbatim in caller-visible TextContent. Emit a
+            # fixed, name-free envelope (tool redacted in _meta) instead.
+            return ToolResult(structured_content=unknown_tool_envelope())
         except (FastMCPValidationError, PydanticValidationError) as exc:
             tool_name = context.message.name
             arguments = dict(context.message.arguments or {})
@@ -50,6 +59,25 @@ class InputValidationMiddleware(Middleware):
             else:
                 envelope = arg_validation_failure_envelope(tool_name=tool_name, arguments=arguments)
             return ToolResult(structured_content=envelope)
+
+    async def on_read_resource(
+        self,
+        context: MiddlewareContext[Any],
+        call_next: CallNext[Any, ResourceResult],
+    ) -> ResourceResult:
+        """Emit FIXED, URI-free errors for an unknown or unreadable resource.
+
+        FastMCP raises ``NotFoundError("Unknown resource: '<uri>'")`` (and
+        ``ResourceError("Error reading resource '<uri>': <detail>")``) which echo
+        the attacker-controlled URI (and error detail) into the caller-visible
+        ``McpError``. Re-raise a fixed message that names neither.
+        """
+        try:
+            return await call_next(context)
+        except FastMCPNotFoundError:
+            raise FastMCPNotFoundError("The requested resource was not found.") from None
+        except FastMCPResourceError:
+            raise FastMCPResourceError("The resource could not be read.") from None
 
 
 class _ValidationLogScrubFilter(logging.Filter):

@@ -288,6 +288,21 @@ def validation_error_envelope(
     return envelope
 
 
+def unknown_tool_envelope() -> dict[str, Any]:
+    """Fixed ``not_found`` envelope for an unknown/disabled tool NAME.
+
+    FastMCP raises ``NotFoundError("Unknown tool: '<name>'")`` for an unregistered
+    tool and would echo that attacker-controlled name verbatim in caller-visible
+    ``TextContent``. This envelope never surfaces the requested name -- neither in
+    the message nor in ``_meta.tool`` (redacted to a fixed placeholder).
+    """
+    ctx = McpErrorContext(tool_name="<unknown>")
+    exc = McpToolError(error_code="not_found", message="Unknown tool.")
+    envelope = _error_envelope(exc, ctx, request_id=uuid.uuid4().hex[:12], elapsed_ms=0.0)
+    get_metrics().record_request("<unknown>", "not_found", 0.0)
+    return envelope
+
+
 def arg_validation_failure_envelope(*, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """Fixed ``invalid_input`` envelope when arg validation failed without a
     pydantic cause (a FastMCP ``ValidationError`` whose ``__cause__`` is not a
