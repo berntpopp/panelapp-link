@@ -8,7 +8,7 @@ import respx
 
 from panelapp_link.api.client import PanelAppRestClient
 from panelapp_link.config import PanelAppDataConfigModel
-from panelapp_link.exceptions import DownloadError, RateLimitError
+from panelapp_link.exceptions import DisallowedURLError, DownloadError, RateLimitError
 
 BASE = "https://panelapp.example.org/api/v1"
 
@@ -224,6 +224,183 @@ async def test_503_retried_then_download_error() -> None:
     assert not isinstance(exc_info.value, RateLimitError)
     # 1 initial attempt + 2 retries == 3 calls.
     assert route.call_count == 3
+
+
+# --- F-17: redirect allowlisting, DRF pagination validation, response caps -------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_cross_host_redirect_is_blocked() -> None:
+    """A redirect to a non-allowlisted host fails closed via the event hook."""
+    respx.get(f"{BASE}/panels/1/").mock(
+        return_value=httpx.Response(302, headers={"Location": "https://attacker.test/panels/1/"})
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        with pytest.raises(DisallowedURLError):
+            await client.get_panel(BASE, 1)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_https_downgrade_redirect_is_blocked() -> None:
+    """A same-host redirect that downgrades to http fails closed."""
+    respx.get(f"{BASE}/panels/1/").mock(
+        return_value=httpx.Response(
+            302, headers={"Location": "http://panelapp.example.org/api/v1/panels/1/"}
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        with pytest.raises(DisallowedURLError):
+            await client.get_panel(BASE, 1)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_redirect_with_userinfo_is_blocked() -> None:
+    """A redirect that smuggles userinfo fails closed."""
+    respx.get(f"{BASE}/panels/1/").mock(
+        return_value=httpx.Response(
+            302, headers={"Location": "https://user:pass@panelapp.example.org/api/v1/panels/1/"}
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        with pytest.raises(DisallowedURLError):
+            await client.get_panel(BASE, 1)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_next_on_different_host_is_rejected() -> None:
+    """A DRF ``next`` pointing at a different host fails closed (DownloadError)."""
+    respx.get(f"{BASE}/panels/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "count": 2,
+                "next": "https://attacker.test/api/v1/panels/?page=2",
+                "results": [{"id": 1}],
+            },
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        with pytest.raises(DownloadError):
+            await client.list_panels(BASE)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_next_http_scheme_is_normalized_not_rejected() -> None:
+    """A same-host http ``next`` is normalized to https and followed (not rejected)."""
+    respx.get(f"{BASE}/panels/", params={"page": "2"}).mock(
+        return_value=httpx.Response(200, json={"count": 2, "next": None, "results": [{"id": 2}]})
+    )
+    respx.get(f"{BASE}/panels/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "count": 2,
+                # http (a proxy may emit this) + same host -> normalized to https.
+                "next": "http://panelapp.example.org/api/v1/panels/?page=2",
+                "results": [{"id": 1}],
+            },
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        panels = await client.list_panels(BASE)
+    finally:
+        await client.aclose()
+    assert [p["id"] for p in panels] == [1, 2]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_response_over_byte_cap_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A body over the byte ceiling fails closed (raise) -- never truncated."""
+    monkeypatch.setattr("panelapp_link.api.client._MAX_RESPONSE_BYTES", 8)
+    respx.get(f"{BASE}/panels/5/").mock(
+        return_value=httpx.Response(
+            200, json={"id": 5, "name": "a payload that comfortably exceeds eight bytes"}
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        with pytest.raises(DownloadError):
+            await client.get_panel(BASE, 5)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_page_ceiling_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Exceeding the page ceiling fails loud (never silently truncates the list)."""
+    monkeypatch.setattr("panelapp_link.api.client._MAX_PAGES", 1)
+    respx.get(f"{BASE}/panels/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "count": 99,
+                "next": f"{BASE}/panels/?page=2",
+                "results": [{"id": 1}],
+            },
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        with pytest.raises(DownloadError):
+            await client.list_panels(BASE)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_row_ceiling_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Exceeding the row ceiling fails loud (never silently truncates the list)."""
+    monkeypatch.setattr("panelapp_link.api.client._MAX_ROWS", 2)
+    respx.get(f"{BASE}/panels/").mock(
+        return_value=httpx.Response(
+            200,
+            json={"count": 3, "next": None, "results": [{"id": 1}, {"id": 2}, {"id": 3}]},
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        with pytest.raises(DownloadError):
+            await client.list_panels(BASE)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_happy_path_single_page_unchanged() -> None:
+    """A single-page (``next: null``) list is returned intact under the new guards."""
+    respx.get(f"{BASE}/panels/").mock(
+        return_value=httpx.Response(
+            200, json={"count": 2, "next": None, "results": [{"id": 1}, {"id": 2}]}
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        panels = await client.list_panels(BASE)
+    finally:
+        await client.aclose()
+    assert [p["id"] for p in panels] == [1, 2]
 
 
 @pytest.mark.asyncio

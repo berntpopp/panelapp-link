@@ -42,3 +42,13 @@ class DownloadError(PanelAppError):
 
 class RateLimitError(DownloadError):
     """Raised when the PanelApp API rate-limits or rejects requests (403/429)."""
+
+
+class DisallowedURLError(PanelAppError):
+    """Raised when an outbound request or redirect targets a non-allowlisted URL.
+
+    NON-RETRYABLE: retrying re-issues the identical blocked request. It
+    deliberately does NOT subclass :class:`DownloadError`, so the envelope never
+    misclassifies it as a retryable ``upstream_unavailable`` and the client's
+    retry loop (which only catches httpx transport errors) never swallows it.
+    """

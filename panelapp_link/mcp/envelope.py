@@ -25,6 +25,7 @@ from panelapp_link.constants import (
     RECOMMENDED_CITATION_UK,
 )
 from panelapp_link.exceptions import (
+    DisallowedURLError,
     DownloadError,
     InvalidInputError,
     NotFoundError,
@@ -187,6 +188,11 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
     """
     if isinstance(exc, McpToolError):
         return exc.error_code, exc.message, exc.error_code in _RETRYABLE_CODES
+    if isinstance(exc, DisallowedURLError):
+        # A blocked outbound URL/redirect (F-17) is a fixed, opaque, NON-retryable
+        # failure: retrying re-issues the identical blocked request. The blocked
+        # URL/host is never surfaced (the exception message is already fixed).
+        return "internal_error", "An internal error occurred. The request was not completed.", False
     if isinstance(exc, RateLimitError):
         return "rate_limited", "PanelApp API rate limit hit. Try again later.", True
     if isinstance(exc, DownloadError):
