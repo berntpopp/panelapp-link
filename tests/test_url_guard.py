@@ -51,6 +51,19 @@ async def test_guard_blocks_userinfo() -> None:
         await guard(httpx.Request("GET", "https://user:pass@panelapp-aus.org/api/v1/"))
 
 
+async def test_guard_blocks_empty_colon_at_userinfo() -> None:
+    """The empty ``:@`` form (username==password=="") still fails closed.
+
+    httpx exposes it as a non-empty ``userinfo`` (``b':'``), so the ANY-userinfo
+    check rejects it where a username-or-password check would miss it; a clean
+    allowlisted URL still passes.
+    """
+    guard = make_url_guard(_ALLOWED)
+    with pytest.raises(DisallowedURLError):
+        await guard(httpx.Request("GET", "https://:@panelapp.genomicsengland.co.uk/x"))
+    await guard(httpx.Request("GET", "https://panelapp.genomicsengland.co.uk/api/v1/panels/"))
+
+
 async def test_guard_blocks_non_allowlisted_host() -> None:
     """A host outside the allowlist fails closed."""
     guard = make_url_guard(_ALLOWED)

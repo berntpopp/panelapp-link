@@ -302,6 +302,33 @@ async def test_next_on_different_host_is_rejected() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_next_with_empty_colon_at_userinfo_is_rejected() -> None:
+    """A same-origin ``next`` carrying the empty ``:@`` userinfo fails closed.
+
+    urlsplit leaves username==password=="" for ``:@``, so a username-or-password
+    check would miss it and follow the link; the netloc-``@`` check rejects ANY
+    userinfo, matching the event-hook guard's ANY-userinfo rule.
+    """
+    respx.get(f"{BASE}/panels/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "count": 2,
+                "next": "https://:@panelapp.example.org/api/v1/panels/?page=2",
+                "results": [{"id": 1}],
+            },
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        with pytest.raises(DownloadError):
+            await client.list_panels(BASE)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_next_http_scheme_is_normalized_not_rejected() -> None:
     """A same-host http ``next`` is normalized to https and followed (not rejected)."""
     respx.get(f"{BASE}/panels/", params={"page": "2"}).mock(

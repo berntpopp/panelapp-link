@@ -229,7 +229,10 @@ class PanelAppRestClient:
         parts = urlsplit(raw_next)
         if parts.scheme not in ("http", "https"):
             raise DownloadError("PanelApp pagination link uses an unexpected scheme.")
-        if parts.username or parts.password:
+        # ANY userinfo delimiter is rejected -- including the empty ``:@`` form,
+        # which leaves username/password both "" yet still smuggles a ``@`` into
+        # the netloc (a hostname never legitimately contains ``@``).
+        if "@" in parts.netloc:
             raise DownloadError("PanelApp pagination link carries userinfo.")
         if PanelAppRestClient._origin(raw_next) != base_origin:
             raise DownloadError("PanelApp pagination link changed origin.")
