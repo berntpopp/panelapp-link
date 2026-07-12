@@ -328,6 +328,93 @@ async def test_next_http_scheme_is_normalized_not_rejected() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_next_on_different_port_is_rejected() -> None:
+    """A same-host ``next`` on an ALTERNATE PORT is a distinct origin: fail closed.
+
+    Host-only matching would let ``https://host:8080/...`` slip past (the event-hook
+    guard has no port check either); full-origin matching rejects it before it is
+    ever requested.
+    """
+    respx.get(f"{BASE}/panels/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "count": 2,
+                "next": "https://panelapp.example.org:8080/api/v1/panels/?page=2",
+                "results": [{"id": 1}],
+            },
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        with pytest.raises(DownloadError):
+            await client.list_panels(BASE)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_next_with_foreign_scheme_is_rejected() -> None:
+    """A ``next`` with a non-http(s) scheme (different scheme/origin) fails closed."""
+    respx.get(f"{BASE}/panels/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "count": 2,
+                "next": "ftp://panelapp.example.org/api/v1/panels/?page=2",
+                "results": [{"id": 1}],
+            },
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        with pytest.raises(DownloadError):
+            await client.list_panels(BASE)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_pagination_cycle_fails_loud_not_truncated() -> None:
+    """A ``next`` that revisits an already-fetched page RAISES (never truncates).
+
+    A same-origin cyclic ``next`` (page 2 pointing back at page 1) must fail loud:
+    silently stopping would return a short list, and ``search`` filters the full
+    list downstream, so valid panels would be dropped.
+    """
+    respx.get(f"{BASE}/panels/", params={"page": "2"}).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "count": 4,
+                # Points BACK at page 1 (same origin) -> already seen -> cycle.
+                "next": f"{BASE}/panels/",
+                "results": [{"id": 2}],
+            },
+        )
+    )
+    respx.get(f"{BASE}/panels/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "count": 4,
+                "next": f"{BASE}/panels/?page=2",
+                "results": [{"id": 1}],
+            },
+        )
+    )
+    client = PanelAppRestClient(_config())
+    try:
+        with pytest.raises(DownloadError):
+            await client.list_panels(BASE)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_response_over_byte_cap_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """A body over the byte ceiling fails closed (raise) -- never truncated."""
     monkeypatch.setattr("panelapp_link.api.client._MAX_RESPONSE_BYTES", 8)

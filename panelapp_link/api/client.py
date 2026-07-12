@@ -161,48 +161,78 @@ class PanelAppRestClient:
 
         The upstream ``next`` value is untrusted JSON (not an httpx redirect, so it
         bypasses the client's event-hook guard) and is validated here per hop:
-        same-origin host or fail closed. Page and row ceilings also fail closed --
-        never truncate -- because ``search`` filters the full list downstream, so a
-        silently short list would drop valid panels. A ``seen`` guard stops a
-        self-referential ``next`` from looping forever.
+        it must share the initiating request's FULL ORIGIN (scheme, host, AND
+        port) or fail closed. Every ceiling -- pages, rows, and a revisited
+        (cyclic) ``next`` -- also fails CLOSED (raises ``DownloadError``); none
+        truncates, because ``search`` filters the full list downstream, so a
+        silently short list would drop valid panels.
         """
         results: list[dict[str, Any]] = []
         seen: set[str] = set()
-        origin_host = (urlsplit(url).hostname or "").lower()
+        base_origin = self._origin(url)
         next_url: str | None = url
         pages = 0
-        while next_url and next_url not in seen:
+        while next_url is not None:
+            if next_url in seen:
+                # A same-origin ``next`` pointing back at an already-fetched page
+                # would otherwise stop the loop early and return a partial list;
+                # fail loud instead of silently truncating.
+                raise DownloadError("PanelApp pagination revisited a page.")
+            seen.add(next_url)
             pages += 1
             if pages > _MAX_PAGES:
                 raise DownloadError("PanelApp pagination exceeded the page ceiling.")
-            seen.add(next_url)
             payload = await self._request(next_url)
             page = payload.get("results")
             if isinstance(page, list):
                 results.extend(page)
                 if len(results) > _MAX_ROWS:
                     raise DownloadError("PanelApp pagination exceeded the row ceiling.")
-            next_url = self._safe_next_url(payload.get("next"), origin_host)
+            next_url = self._safe_next_url(payload.get("next"), base_origin)
         return results
 
     @staticmethod
-    def _safe_next_url(raw_next: Any, origin_host: str) -> str | None:
+    def _origin(raw_url: str) -> tuple[str, int]:
+        """Return the ``(host, port)`` origin of ``raw_url`` under https normalization.
+
+        The scheme is normalized to https before the port default is applied, so a
+        reverse proxy's http ``next`` for an https listing shares the origin of its
+        https base (both resolve to the default 443) while any *explicit* alternate
+        port (``:8080``) resolves to a distinct origin. A malformed port fails
+        CLOSED.
+        """
+        parts = urlsplit(raw_url)
+        try:
+            port = parts.port
+        except ValueError:
+            raise DownloadError("PanelApp pagination link has an invalid port.") from None
+        return (parts.hostname or "").lower(), 443 if port is None else port
+
+    @staticmethod
+    def _safe_next_url(raw_next: Any, base_origin: tuple[str, int]) -> str | None:
         """Validate a DRF ``next`` link, or return ``None`` when there is no next.
 
-        A host change (or embedded userinfo) fails CLOSED. The scheme is
-        NORMALIZED to https rather than rejected: a reverse proxy in front of
-        PanelApp may legitimately emit an http ``next`` for an https listing, and
-        rejecting it would drop the tail of the list.
+        The link must share the initiating request's FULL ORIGIN -- scheme, host,
+        AND port -- or it fails CLOSED. Host-only matching is not enough: an
+        alternate port (``...:8080``) or a different scheme/host is a distinct
+        origin and must be rejected (the event-hook guard checks neither port nor
+        this untrusted link). Embedded userinfo and non-http(s) schemes also fail
+        closed. The scheme is NORMALIZED to https for the follow-up request -- a
+        reverse proxy may legitimately emit an http ``next`` for an https listing
+        -- but ONLY after the host+port have been confirmed to match the base
+        origin.
         """
         if raw_next is None:
             return None
         if not isinstance(raw_next, str):
             raise DownloadError("PanelApp returned a malformed pagination link.")
         parts = urlsplit(raw_next)
+        if parts.scheme not in ("http", "https"):
+            raise DownloadError("PanelApp pagination link uses an unexpected scheme.")
         if parts.username or parts.password:
             raise DownloadError("PanelApp pagination link carries userinfo.")
-        if (parts.hostname or "").lower() != origin_host:
-            raise DownloadError("PanelApp pagination link changed host.")
+        if PanelAppRestClient._origin(raw_next) != base_origin:
+            raise DownloadError("PanelApp pagination link changed origin.")
         return urlunsplit(parts._replace(scheme="https"))
 
     async def list_panels(self, base_url: str) -> list[dict[str, Any]]:
