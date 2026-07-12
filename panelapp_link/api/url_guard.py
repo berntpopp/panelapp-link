@@ -19,19 +19,27 @@ import httpx
 
 from panelapp_link.exceptions import DisallowedURLError
 
+HTTP_POLICY_ERROR = "Outbound HTTP policy rejected the request."
+Origin = tuple[str, int]
 
-def build_host_allowlist(*base_urls: str) -> frozenset[str]:
-    """Return the lowercased set of hosts parsed from the configured base URLs."""
-    hosts: set[str] = set()
+
+def build_origin_allowlist(*base_urls: str) -> frozenset[Origin]:
+    """Return normalized ``(hostname, effective_port)`` configured origins."""
+    origins: set[Origin] = set()
     for url in base_urls:
-        host = urlsplit(url).hostname
+        parsed = urlsplit(url)
+        host = parsed.hostname
         if host:
-            hosts.add(host.lower())
-    return frozenset(hosts)
+            try:
+                port = parsed.port
+            except ValueError:
+                continue
+            origins.add((host.lower(), 443 if port is None else port))
+    return frozenset(origins)
 
 
 def make_url_guard(
-    allowed_hosts: frozenset[str],
+    allowed_origins: frozenset[Origin],
 ) -> Callable[[httpx.Request], Awaitable[None]]:
     """Build an async httpx request event-hook enforcing ``allowed_hosts``.
 
@@ -43,10 +51,15 @@ def make_url_guard(
     async def _guard(request: httpx.Request) -> None:
         url = request.url
         if url.scheme != "https":
-            raise DisallowedURLError("Outbound request blocked: scheme is not https.")
+            raise DisallowedURLError(HTTP_POLICY_ERROR)
         if url.userinfo:
-            raise DisallowedURLError("Outbound request blocked: userinfo is not permitted.")
-        if (url.host or "").lower() not in allowed_hosts:
-            raise DisallowedURLError("Outbound request blocked: host is not allowlisted.")
+            raise DisallowedURLError(HTTP_POLICY_ERROR)
+        try:
+            port = url.port
+        except ValueError:
+            raise DisallowedURLError(HTTP_POLICY_ERROR) from None
+        origin = ((url.host or "").lower(), 443 if port is None else port)
+        if origin not in allowed_origins:
+            raise DisallowedURLError(HTTP_POLICY_ERROR)
 
     return _guard

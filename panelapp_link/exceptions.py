@@ -52,3 +52,17 @@ class DisallowedURLError(PanelAppError):
     misclassifies it as a retryable ``upstream_unavailable`` and the client's
     retry loop (which only catches httpx transport errors) never swallows it.
     """
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__("Outbound HTTP policy rejected the request.")
+
+
+class ResponseTooLargeError(DownloadError):
+    """Raised when a decoded upstream response crosses the HTTP-policy cap.
+
+    This is a policy failure, not a transient upstream failure, and must never
+    enter the retry loop.
+    """
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__("Outbound HTTP policy rejected the request.")
