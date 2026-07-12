@@ -19,7 +19,12 @@ from urllib.parse import quote, urlsplit, urlunsplit
 import httpx
 
 from panelapp_link.api.url_guard import HTTP_POLICY_ERROR, build_origin_allowlist, make_url_guard
-from panelapp_link.exceptions import DownloadError, RateLimitError, ResponseTooLargeError
+from panelapp_link.exceptions import (
+    DisallowedURLError,
+    DownloadError,
+    RateLimitError,
+    ResponseTooLargeError,
+)
 
 if TYPE_CHECKING:
     from panelapp_link.config import PanelAppDataConfigModel
@@ -123,6 +128,8 @@ class PanelAppRestClient:
                     else:
                         body = await self._read_capped(response)
                         return json.loads(body)  # type: ignore[no-any-return]
+            except httpx.TooManyRedirects:
+                raise DisallowedURLError(HTTP_POLICY_ERROR) from None
             except (httpx.TimeoutException, httpx.TransportError):
                 last_exc = DownloadError("PanelApp request failed (network error).")
                 last_status = None
