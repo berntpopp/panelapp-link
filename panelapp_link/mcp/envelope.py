@@ -30,6 +30,7 @@ from panelapp_link.exceptions import (
     InvalidInputError,
     NotFoundError,
     RateLimitError,
+    ResponseTooLargeError,
 )
 from panelapp_link.mcp.next_commands import recovery_commands
 from panelapp_link.mcp.untrusted_content import UntrustedTextLimitError, sanitize_message
@@ -188,7 +189,7 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
     """
     if isinstance(exc, McpToolError):
         return exc.error_code, exc.message, exc.error_code in _RETRYABLE_CODES
-    if isinstance(exc, DisallowedURLError):
+    if isinstance(exc, (DisallowedURLError, ResponseTooLargeError)):
         # A blocked outbound URL/redirect (F-17) is a fixed, opaque, NON-retryable
         # failure: retrying re-issues the identical blocked request. The blocked
         # URL/host is never surfaced (the exception message is already fixed).

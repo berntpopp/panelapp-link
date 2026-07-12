@@ -10,25 +10,27 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from panelapp_link.api.url_guard import build_host_allowlist, make_url_guard
-from panelapp_link.exceptions import DisallowedURLError
+from panelapp_link.api.url_guard import HTTP_POLICY_ERROR, build_origin_allowlist, make_url_guard
+from panelapp_link.exceptions import DisallowedURLError, ResponseTooLargeError
 
-_ALLOWED = frozenset({"panelapp.genomicsengland.co.uk", "panelapp-aus.org"})
+_ALLOWED = frozenset({("panelapp.genomicsengland.co.uk", 443), ("panelapp-aus.org", 443)})
 
 
-def test_build_host_allowlist_lowercases_and_dedupes() -> None:
-    """Hosts are derived from the base URLs, lowercased, and de-duplicated."""
-    hosts = build_host_allowlist(
+def test_build_origin_allowlist_lowercases_and_normalizes_effective_ports() -> None:
+    """Origins derive from configuration, with :443 equivalent to an omitted port."""
+    origins = build_origin_allowlist(
         "https://PanelApp.GenomicsEngland.co.uk/api/v1",
         "https://panelapp-aus.org/api/v1",
         "https://panelapp-aus.org/api/v1",
     )
-    assert hosts == frozenset({"panelapp.genomicsengland.co.uk", "panelapp-aus.org"})
+    assert origins == frozenset(
+        {("panelapp.genomicsengland.co.uk", 443), ("panelapp-aus.org", 443)}
+    )
 
 
-def test_build_host_allowlist_skips_hostless_values() -> None:
+def test_build_origin_allowlist_skips_hostless_values() -> None:
     """A blank or scheme-less base URL contributes no host (never a wildcard)."""
-    assert build_host_allowlist("", "not-a-url") == frozenset()
+    assert build_origin_allowlist("", "not-a-url") == frozenset()
 
 
 async def test_guard_allows_https_allowlisted_host() -> None:
@@ -71,9 +73,18 @@ async def test_guard_blocks_non_allowlisted_host() -> None:
         await guard(httpx.Request("GET", "https://attacker.test/api/v1/panels/"))
 
 
+async def test_guard_requires_exact_normalized_origin_not_just_host() -> None:
+    guard = make_url_guard(frozenset({("panelapp-aus.org", 8443)}))
+    await guard(httpx.Request("GET", "https://PANELAPP-AUS.ORG:8443/api/v1/panels/"))
+    with pytest.raises(DisallowedURLError):
+        await guard(httpx.Request("GET", "https://panelapp-aus.org/api/v1/panels/"))
+
+
 def test_disallowed_url_error_classifies_non_retryable() -> None:
     """The guard exception maps to a fixed, NON-retryable envelope code."""
     from panelapp_link.mcp.envelope import _classify
 
     _code, _message, retryable = _classify(DisallowedURLError("blocked"))
     assert retryable is False
+    assert str(DisallowedURLError("host in supplied text")) == HTTP_POLICY_ERROR
+    assert str(ResponseTooLargeError("host in supplied text")) == HTTP_POLICY_ERROR

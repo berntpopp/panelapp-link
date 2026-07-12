@@ -18,8 +18,8 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 import httpx
 
-from panelapp_link.api.url_guard import build_host_allowlist, make_url_guard
-from panelapp_link.exceptions import DownloadError, RateLimitError
+from panelapp_link.api.url_guard import HTTP_POLICY_ERROR, build_origin_allowlist, make_url_guard
+from panelapp_link.exceptions import DownloadError, RateLimitError, ResponseTooLargeError
 
 if TYPE_CHECKING:
     from panelapp_link.config import PanelAppDataConfigModel
@@ -69,12 +69,12 @@ class PanelAppRestClient:
         # Allowlist is DERIVED from the configured base URLs (never hardcoded), so
         # an operator override of either region URL keeps working. Redirects stay
         # enabled but every hop is validated by the request event-hook.
-        allowed_hosts = build_host_allowlist(config.uk_api_url, config.au_api_url)
+        allowed_origins = build_origin_allowlist(config.uk_api_url, config.au_api_url)
         self._client = client or httpx.AsyncClient(
             timeout=httpx.Timeout(config.request_timeout),
             follow_redirects=True,
             max_redirects=_MAX_REDIRECTS,
-            event_hooks={"request": [make_url_guard(allowed_hosts)]},
+            event_hooks={"request": [make_url_guard(allowed_origins)]},
             headers={
                 "Accept": "application/json",
                 "User-Agent": config.user_agent,
@@ -144,7 +144,7 @@ class PanelAppRestClient:
         async for chunk in response.aiter_bytes():
             total += len(chunk)
             if total > _MAX_RESPONSE_BYTES:
-                raise DownloadError("PanelApp response exceeded the byte ceiling.")
+                raise ResponseTooLargeError(HTTP_POLICY_ERROR)
             chunks.append(chunk)
         return b"".join(chunks)
 
