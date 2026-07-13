@@ -23,6 +23,9 @@ wheels/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.nox/
+.tox/
+.cache/
 .dmypy.json
 htmlcov/
 .coverage
@@ -31,6 +34,11 @@ coverage.xml
 
 # Do not ship the built SQLite database into the image; the entrypoint builds it.
 data/
+*.db
+*.sqlite
+*.sqlite3
+*.parquet
+*.feather
 
 .env
 .env.*

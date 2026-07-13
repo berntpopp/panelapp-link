@@ -4,8 +4,14 @@
 
 services:
   panelapp-link:
+    build: !reset null
+    image: "${PANELAPP_LINK_IMAGE:?Set PANELAPP_LINK_IMAGE to ghcr.io/berntpopp/panelapp-link@sha256:<digest>}"
+    pull_policy: missing
+    container_name: !reset null
+
     # Production-specific environment variables.
     environment:
+      GF_HEALTHCHECK_HOST: localhost
       PANELAPP_LINK_TRANSPORT: unified
       PANELAPP_LINK_LOG_LEVEL: INFO
       PANELAPP_LINK_LOG_FORMAT: json
@@ -27,6 +33,9 @@ services:
 
     # No published host ports by default in production; front with a reverse proxy.
     ports: !reset []
+    expose:
+      - "8000"
+    networks: !reset null
 
     security_opt:
       - no-new-privileges:true
@@ -39,39 +48,28 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m,mode=1777
 
-    pids_limit: 256
     init: true
 
-    # Unified server (FastAPI on / and MCP on /mcp via the same port).
-    command:
-      ["python", "server.py", "--transport", "unified", "--host", "0.0.0.0", "--port", "8000"]
+    command: !reset null
+    restart: on-failure
 
     # Production resource hints.
-    deploy:
+    deploy: !override
       resources:
         limits:
           memory: 1G
           cpus: "1.0"
           pids: 256
-        reservations:
-          memory: 256M
-          cpus: "0.25"
-
-      # Production restart policy.
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
 
     # Health check for production. The server is a stateless live-API client and
     # is ready to serve almost immediately.
     healthcheck:
-      test: ["CMD", "curl", "-f", "-H", "Host: localhost", "http://127.0.0.1:8000/health"]
-      interval: 20s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      test:
+        ["CMD", "sh", "-c", "curl -f -H \"Host: $${GF_HEALTHCHECK_HOST}\" http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
     # Production logging with rotation.
     logging:
@@ -80,3 +78,5 @@ services:
         max-size: "50m"
         max-file: "5"
         labels: "service=panelapp-link,environment=production"
+
+networks: !reset {}

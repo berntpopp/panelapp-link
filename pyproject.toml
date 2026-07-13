@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "panelapp-link"
-version = "0.5.3"
+version = "0.5.4"
 description = "MCP/API server for PanelApp (Genomics England UK + PanelApp Australia) gene-panel data"
 readme = "README.md"
 license = { text = "MIT" }
