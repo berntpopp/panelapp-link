@@ -60,14 +60,17 @@ upstream data.
 
 ### Gene-first
 
-1. **Resolve the gene.** `resolve_gene(query | gene_symbol | hgnc_id)` maps a
-   symbol, an HGNC CURIE (e.g. `HGNC:1100`), or free text to a `GeneSummary`
-   (with `matches[]` and an `ambiguous_query` flag when several genes match).
-2. **List the gene's panels.** `get_gene_panels(gene_symbol | hgnc_id, region,
+1. **Resolve the gene.** `resolve_gene(query | gene_symbol)` maps free text or an
+   approved symbol to a `GeneSummary`, with `matches[]` when several genes match.
+   It takes no `hgnc_id`: PanelApp is queried by gene symbol, so an HGNC CURIE
+   cannot drive a lookup — pass it as free text in `query` if that is all you have.
+2. **List the gene's panels.** `get_gene_panels(gene_symbol, hgnc_id, region,
    min_confidence)` returns every panel the gene appears on across regions as
    `GenePanelHit` rows (region, panel id/name, version, confidence label/level,
    mode of inheritance), grouped and sorted by confidence so the strongest panels
-   surface first.
+   surface first. `gene_symbol` is **required** and `hgnc_id` is an optional filter
+   over the hits, not a standalone query. The call is not paged: it returns every
+   panel for the gene at once.
 
 ### Aggregation / batch
 
@@ -108,8 +111,9 @@ large gene lists in its own context.
 | `standard` | adds phenotypes, penetrance, signed-off detail, region coordinate summary |
 | `full` | adds evidence, publications, OMIM, tags, and the raw entity `extra` block |
 
-Each response carries a plain-English **`headline`** at the top so an agent can
-answer without parsing the full payload. `_meta.next_commands` provides
+`get_panelapp_diagnostics` answers with a plain-English **`headline`** so an agent
+can read the backend state without parsing the payload; the data tools do not emit
+one. `_meta.next_commands` provides
 ready-to-call `{tool, arguments}` next steps to chain the workflow without
 guessing — present on **error** envelopes too (e.g. a `not_found` from
 `get_gene_panels` hands back `resolve_gene` with the same query). Every `_meta`

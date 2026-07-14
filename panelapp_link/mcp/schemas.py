@@ -135,9 +135,11 @@ _TRUNCATION = {
 }
 
 # Fields shared by success and error envelopes (all optional but ``success``).
+# ``headline`` is NOT here: only get_panelapp_diagnostics emits one, so only that
+# tool's schema declares it (advertising it on every tool taught agents -- and the
+# docs -- that every response carries a headline, which no tool but diagnostics does).
 _BASE_PROPS: dict[str, Any] = {
     "success": _BOOL,
-    "headline": _STR,
     "_meta": _META,
     "error_code": _STR,
     "message": _STR,
@@ -219,5 +221,9 @@ _DIAGNOSTICS_DATA: dict[str, Any] = {
     "additionalProperties": True,
 }
 DIAGNOSTICS_SCHEMA = tool_output_schema(
-    server_version=_STR, capabilities_version=_STR, data=_DIAGNOSTICS_DATA, refresh=_OBJ
+    headline=_STR,  # the ONLY tool that emits one (see _BASE_PROPS)
+    server_version=_STR,
+    capabilities_version=_STR,
+    data=_DIAGNOSTICS_DATA,
+    refresh=_OBJ,
 )

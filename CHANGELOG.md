@@ -37,6 +37,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **both** `get_panel` and `get_panel_genes` require a concrete region (they name
   only `get_panel` before), so an agent reading the prose instead of the schema
   cannot infer that `get_panel_genes(region="both")` is valid.
+- `get_gene_panels` now **requires** `gene_symbol` in its schema. PanelApp is queried
+  by gene symbol, so the service always rejected hgnc-only input -- but the schema
+  advertised `gene_symbol` as optional, which made `get_gene_panels(hgnc_id=...)`
+  schema-valid and then runtime-rejected. `hgnc_id` remains an optional filter over
+  the hits. The service guard stays as defence in depth.
+- Only `get_panelapp_diagnostics` declares `headline` in its output schema; the other
+  eight tools advertised the field in the shared envelope but never emitted it.
+
+### Documentation
+
+- Corrected four contract claims that the runtime does not honour: `resolve_gene`
+  never accepted an `hgnc_id` argument (README, `docs/usage.md`); `get_gene_panels`
+  is not cursor-paged (`panelapp://usage`, `panelapp://reference`); only the
+  diagnostics response carries a `headline` (`docs/usage.md`); and `ambiguous_query`
+  is not an error code the server can emit, while `limit_exceeded` (which it does
+  emit) was missing from the taxonomy (`docs/architecture.md`,
+  `panelapp://reference`). Guarded by `tests/unit/test_docs_contract.py`, which
+  derives every claim from the live schemas / capabilities.
 
 ## [0.5.5] - 2026-07-13
 

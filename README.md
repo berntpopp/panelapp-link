@@ -71,7 +71,7 @@ block is in [Deployment](docs/deployment.md#connecting-an-mcp-client).
 | `get_gene_panels` | Every panel a gene appears on, rolled up across regions |
 | `get_panels_for_genes` | Panel membership for a batch of gene symbols in one call |
 | `compare_panels` | Diff the genes of 2-5 panels: shared, only-in, confidence deltas |
-| `resolve_gene` | Resolve a symbol, HGNC id, or free text to a gene (with `matches[]` if ambiguous) |
+| `resolve_gene` | Resolve an approved symbol or free text to a gene (with `matches[]` if ambiguous) |
 | `get_server_capabilities` | Tool inventory, vocabularies, response modes, live sources |
 | `get_panelapp_diagnostics` | Live upstream sources, cache TTL, and cache stats |
 
