@@ -71,6 +71,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   emit) was missing from the taxonomy (`docs/architecture.md`,
   `panelapp://reference`). Guarded by `tests/unit/test_docs_contract.py`, which
   derives every claim from the live schemas / capabilities.
+## [0.5.7] - 2026-07-14
+
+### Fixed
+
+- **The release workflow's production Compose check never supplied the image pin it fails
+  closed without**, so it errored on every release since the prod overlay started requiring
+  a digest-addressed image. It now passes a placeholder reference, so the step checks what
+  it is meant to check: that the production Compose model is valid.
+
+## [0.5.6] - 2026-07-14
+
+### Changed
+
+- **The NPM deployment pulls the released image instead of building from source.**
+  `docker/docker-compose.npm.yml` carried `build:`, so a deploy rebuilt the image on the
+  server even though CI had already published an attested, digest-addressable image to
+  GHCR — the published image was never consumed. The overlay now requires
+  `PANELAPP_LINK_IMAGE` pinned to a digest and fails closed when it is unset. Nothing
+  else changed: `container_name`, the Compose project name, the healthcheck, networks,
+  tmpfs and the cache/rate-limit `environment` are all preserved, so the deployed
+  topology is untouched. Research use only; not for clinical decision support.
 
 ## [0.5.5] - 2026-07-13
 
