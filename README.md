@@ -1,251 +1,117 @@
-# PanelApp-Link
+# panelapp-link
 
-MCP + FastAPI server that grounds **gene-panel** questions in **PanelApp** —
-a **pure live-API client** over **both** Genomics England PanelApp (UK) and
-PanelApp Australia that answers panel/gene questions across either or both
-regions, querying the public REST APIs per request with an in-memory cache.
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![CI](https://github.com/berntpopp/panelapp-link/actions/workflows/ci.yml/badge.svg)](https://github.com/berntpopp/panelapp-link/actions/workflows/ci.yml)
+[![Conformance](https://github.com/berntpopp/panelapp-link/actions/workflows/conformance.yml/badge.svg)](https://github.com/berntpopp/panelapp-link/actions/workflows/conformance.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A drop-in sibling of the `*-link` MCP fleet (e.g. `gencc-link`, `hgnc-link`).
-The server identity is `panelapp-link` (`serverInfo.name`), and its canonical
-gateway **namespace token** is `panelapp`: leaf tools stay unprefixed here and
-the aggregator prefixes them at mount time, so `search_panels` is surfaced as
-`panelapp_search_panels` behind the GeneFoundry router.
+An MCP server (Streamable HTTP) that grounds **gene-panel** questions in
+**PanelApp** — the crowdsourced, expert-reviewed catalogue of consensus
+diagnostic gene panels — across **both** instances: Genomics England PanelApp
+(UK) and PanelApp Australia.
 
-> Research use only. **Not** for diagnosis, treatment, triage, patient
-> management, or clinical decision support.
+> [!IMPORTANT]
+> Research use only. Not clinical decision support. Do not use for diagnosis,
+> treatment, triage, or patient management.
 
-## Features
+## Why
 
-- **Both PanelApp regions** mirrored — Genomics England PanelApp (UK) and
-  PanelApp Australia — selectable per call via `region` (`uk` | `australia` |
-  `both`, default `both`).
-- **All three entity types** — genes, regions (CNVs), and STRs (short tandem
-  repeats), each with its traffic-light **confidence** (green / amber / red),
-  mode of inheritance, and phenotypes.
-- **Latest version + signed-off metadata** — every panel keeps its latest
-  version plus `signed_off_version` / `signed_off_date` merged from the
-  signed-off endpoint.
-- **Cross-region gene roll-up** — fast gene-to-panels lookups aggregated across
-  both regions (panel count, regions present, max confidence).
-- **Server-side aggregation** — `compare_panels` diffs the genes of 2–5 panels
-  (shared / only-in / confidence deltas), and `get_panels_for_genes` resolves
-  panel membership for up to 20 gene symbols in one call.
-- **Pure live-API client, no database** — queries the public PanelApp REST APIs
-  per request and memoizes raw payloads in an in-memory TTL cache (default 6h),
-  so the server is stateless: no SQLite mirror, no ingest, no build step.
-- **9 MCP tools** with token-efficient `response_mode` shaping, typed
-  `outputSchema`, plain-English headlines, and ready-to-call
-  `_meta.next_commands` chains — on success **and** error envelopes, so recovery
-  is deterministic.
-- **Confidence filtering** — `min_confidence` filters by traffic-light rank
-  (green = only green; amber = amber + green; red = all).
-- **Observability** — every `_meta` carries `request_id` + `elapsed_ms`;
-  `get_panelapp_diagnostics` reports the live sources, cache TTL, and cache stats.
-- **Three transports** from one codebase: `unified` (REST + MCP), `http`, `stdio`.
-- **Agent-discoverable** — `panelapp://` capabilities, usage, reference, license,
-  citation, and research-use resources; typed error envelopes.
+PanelApp's public REST API is a per-region, panel-shaped CRUD surface, and three
+of its properties make it awkward to ask the questions clinicians and curators
+actually ask:
 
-## Data sources & license
+- **It is two APIs, not one.** UK and Australia are separate deployments with no
+  cross-region view, so "which panels carry this gene?" has to be asked twice and
+  reconciled by hand.
+- **There is no server-side panel search.** A client must page the whole
+  `/panels/` listing and filter it itself — and PanelApp answers aggressive
+  per-IP bursts with HTTP 429.
+- **Signed-off metadata lives elsewhere.** A panel's signed-off version and date
+  come from a different endpoint than the panel it describes.
 
-PanelApp exposes public, no-auth REST APIs for two regions; PanelApp-Link queries
-both live, per request, with an in-memory cache — always serving the current
-upstream data.
-
-- **Sources:**
-  - Genomics England PanelApp (UK) —
-    [`panelapp.genomicsengland.co.uk/api/v1`](https://panelapp.genomicsengland.co.uk/api/v1)
-  - PanelApp Australia —
-    [`panelapp-aus.org/api/v1`](https://panelapp-aus.org/api/v1)
-- **Data license:** PanelApp content is provided by Genomics England and the
-  Australian Genomics PanelApp under their respective terms; consult each portal
-  for attribution and reuse terms.
-- **Not clinical:** PanelApp data is for research use only and is not intended for
-  direct diagnostic use or medical decision-making without review by a genetics
-  professional.
+panelapp-link pays that fan-out once, behind one tool call: it queries both
+regions live, filters panels in memory, merges the signed-off metadata, and rolls
+genes up across regions (panel count, regions present, max confidence). It then
+adds two aggregations upstream has no endpoint for — a gene-level diff of 2-5
+panels, and panel membership for a batch of gene symbols in a single call.
 
 ## Quick start
 
-```bash
-# Install uv if needed
-curl -LsSf https://astral.sh/uv/install.sh | sh
+The server is hosted — no install, and **no API key** (both upstream APIs are
+public and unauthenticated):
 
-# Install project and dev dependencies
+```bash
+claude mcp add --transport http panelapp-link https://panelapp-link.genefoundry.org/mcp
+```
+
+To run it locally (Python 3.12+, [uv](https://github.com/astral-sh/uv)):
+
+```bash
 uv sync
-
-# Start the unified REST + MCP server on http://127.0.0.1:8000
-make dev
-
-# Or start the local stdio MCP server (for Claude Desktop)
-make mcp-serve
-```
-
-There is **no build step**. The server is a pure live-API client: it queries the
-public PanelApp REST APIs on demand and caches raw payloads in memory (6h TTL by
-default), so it is ready to serve as soon as it starts.
-
-## Connecting Claude Code & Claude Desktop
-
-Streamable HTTP at `/mcp` is recommended; stdio is a local fallback.
-
-### Claude Code (HTTP)
-
-```bash
-make dev
+make dev                                    # unified REST + MCP on 127.0.0.1:8000
 claude mcp add --transport http panelapp-link http://127.0.0.1:8000/mcp
+curl -s localhost:8000/health
 ```
 
-### Claude Desktop (HTTP)
+**There is no data build step.** panelapp-link is a pure live-API client: no
+database, no ingest, no volume. It queries the PanelApp REST APIs per request and
+memoizes raw payloads in an in-memory TTL cache (6 hours by default), so it is
+ready to serve as soon as it starts.
 
-```json
-{
-  "mcpServers": {
-    "panelapp-link": {
-      "type": "http",
-      "url": "http://127.0.0.1:8000/mcp"
-    }
-  }
-}
-```
+`make mcp-serve` runs the stdio server instead, for Claude Desktop; the config
+block is in [Deployment](docs/deployment.md#connecting-an-mcp-client).
 
-### Claude Desktop (stdio)
-
-Run the stdio server from a checkout with `uv` (no install step). The stdio entry
-point is a live-API client and needs no data directory or build step. See
-[`claude-desktop-config.json`](claude-desktop-config.json) for a ready-to-paste
-block.
-
-```json
-{
-  "mcpServers": {
-    "panelapp-link": {
-      "command": "uv",
-      "args": ["--directory", "/absolute/path/to/panelapp-link", "run", "panelapp-link-mcp"]
-    }
-  }
-}
-```
-
-## Available MCP tools
+## Tools
 
 | Tool | Purpose |
 |------|---------|
-| `search_panels` | Panel search (in-memory filter over name / disorders / disease group) across regions |
-| `get_panel` | One panel's detail (`region` `uk`\|`australia`) + entity-count breakdown |
-| `get_panel_genes` | A panel's entities (`entity_type` gene\|region\|str), filterable by `min_confidence` |
-| `get_gene_panels` | All panels a gene appears on, across regions, grouped/sorted by confidence |
-| `resolve_gene` | Resolve a symbol / HGNC id / free text to a gene (+ `matches[]` if ambiguous) |
-| `get_server_capabilities` | Tool inventory, confidence vocab, entity types, regions, response modes, live sources |
-| `get_panelapp_diagnostics` | Live sources, cache TTL, and in-memory cache stats |
+| `search_panels` | Find panels by name, disorder, or disease group, across regions |
+| `get_panel` | One panel's detail and entity-count breakdown |
+| `get_panel_genes` | A panel's entities — gene, region (CNV), or STR — filterable by confidence |
+| `get_gene_panels` | Every panel a gene appears on, rolled up across regions |
+| `get_panels_for_genes` | Panel membership for a batch of gene symbols in one call |
+| `compare_panels` | Diff the genes of 2-5 panels: shared, only-in, confidence deltas |
+| `resolve_gene` | Resolve a symbol, HGNC id, or free text to a gene (with `matches[]` if ambiguous) |
+| `get_server_capabilities` | Tool inventory, vocabularies, response modes, live sources |
+| `get_panelapp_diagnostics` | Live upstream sources, cache TTL, and cache stats |
 
-Tool names are unprefixed `verb_noun` (canonical verbs only); the gateway adds
-the `panelapp` namespace at mount time (e.g. `search_panels` ->
-`panelapp_search_panels`). Tools whose payloads vary accept `response_mode`:
-`minimal` | `compact` (default) | `standard` | `full`, and the data tools accept
-`region` (`uk` | `australia` | `both`). See [`docs/usage.md`](docs/usage.md) for
-the canonical workflows and the citation contract.
+The server identity is `panelapp-link` (`serverInfo.name`). Leaf names are
+unprefixed per Tool-Naming Standard v1; behind
+[genefoundry-router](https://github.com/berntpopp/genefoundry-router) they surface
+namespaced under the `panelapp` token as `panelapp_<tool>` — e.g.
+`panelapp_search_panels`.
 
-## Architecture
+`region` (`uk` | `australia` | `both`) defaults to `both` on the tools that fan
+out across both instances — `search_panels`, `get_gene_panels`,
+`get_panels_for_genes`, `resolve_gene`. A panel id is region-scoped, so
+`get_panel` and `get_panel_genes` instead **require** a single concrete region
+(`uk` or `australia`). `compare_panels` takes no top-level `region` — each ref in
+`panels[]` carries its own. Every data tool takes `response_mode` (`minimal` |
+`compact` | `standard` | `full`, default `compact`), and the gene/entity tools
+take `min_confidence`, which filters by traffic-light rank (green = only green;
+amber = amber + green; red = all). Workflows and the citation contract:
+[Usage](docs/usage.md).
 
-PanelApp-Link is a **pure live-API client**. Each query calls the public PanelApp
-REST APIs (1-2 calls per region) and memoizes the raw payloads in a small
-in-memory **TTL cache** (default 6h), so repeated and related queries within the
-window do not re-hit upstream. There is no database, no ingest, and no build step;
-the server is stateless.
+## Data & provenance
 
-```
-PanelApp UK + AU REST APIs (no auth)
-  -> async REST client (concurrency cap, jittered backoff, honours Retry-After)
-  -> service (per-query fetch + in-memory TTL cache; search filters in memory)
-  -> MCP tools / envelope  +  FastAPI (/health, /, /docs)
-  -> transports: unified | http | stdio
-```
+**Sources** — two public, no-auth REST APIs, queried live:
 
-Full details, the per-tool API mapping, the cache, and an ASCII diagram are in
-[`docs/architecture.md`](docs/architecture.md).
+- Genomics England PanelApp (UK) — [`panelapp.genomicsengland.co.uk/api/v1`](https://panelapp.genomicsengland.co.uk/api/v1)
+- PanelApp Australia — [`panelapp-aus.org/api/v1`](https://panelapp-aus.org/api/v1)
 
-## Configuration
+**Refresh model** — no snapshot and no release cadence: every query hits upstream
+and is memoized in an in-memory TTL cache, so results are always the current
+upstream data, bounded only by the TTL. Each panel keeps its **latest** version
+alongside the `signed_off_version` / `signed_off_date` merged from the signed-off
+endpoint. See [Data freshness & caching](docs/data-lifecycle.md).
 
-Settings load from environment variables prefixed `PANELAPP_LINK_` (nested data
-config uses a double underscore) and an optional `.env` file. Copy
-[`.env.example`](.env.example) and adjust. Key variables:
+**Data licence** — PanelApp content is provided by Genomics England and by
+Australian Genomics under their **respective** terms; there is no single blanket
+licence. Consult each portal for attribution and reuse terms. PanelApp data is
+not intended for direct diagnostic use or medical decision-making without review
+by a genetics professional.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PANELAPP_LINK_HOST` | `127.0.0.1` | Server host |
-| `PANELAPP_LINK_PORT` | `8000` | Server port |
-| `PANELAPP_LINK_TRANSPORT` | `unified` | `unified` \| `http` \| `stdio` |
-| `PANELAPP_LINK_MCP_PATH` | `/mcp` | MCP endpoint path |
-| `PANELAPP_LINK_ALLOWED_HOSTS` | `["localhost","127.0.0.1","::1"]` | Exact HTTP Host allowlist as JSON; wildcards are rejected |
-| `PANELAPP_LINK_ALLOWED_ORIGINS` | `[]` | Exact browser Origin allowlist as JSON; absent Origin remains allowed |
-| `PANELAPP_LINK_LOG_LEVEL` | `INFO` | Logging level |
-| `PANELAPP_LINK_LOG_FORMAT` | `console` | `console` or `json` |
-| `PANELAPP_LINK_DATA__UK_API_URL` | `…genomicsengland.co.uk/api/v1` | UK PanelApp API base |
-| `PANELAPP_LINK_DATA__AU_API_URL` | `…panelapp-aus.org/api/v1` | Australia PanelApp API base |
-| `PANELAPP_LINK_DATA__REQUEST_TIMEOUT` | `60` | Per-request HTTP timeout (seconds) |
-| `PANELAPP_LINK_DATA__MAX_CONCURRENCY` | `4` | Max concurrent API requests (kept low; PanelApp rate-limits bursts) |
-| `PANELAPP_LINK_DATA__MAX_RETRIES` | `5` | Retries on 429/5xx/timeout (honours `Retry-After`) |
-| `PANELAPP_LINK_DATA__USER_AGENT` | `PanelApp-Link/<version> …` | User-Agent sent to the PanelApp APIs |
-| `PANELAPP_LINK_DATA__CACHE_SIZE` | `512` | In-memory cache entries (0 disables) |
-| `PANELAPP_LINK_DATA__CACHE_TTL` | `21600` | In-memory cache TTL in seconds (default 6h) |
-
-Host and Origin validation is strict on every HTTP route. Add reverse-proxy
-hostnames as exact entries in `PANELAPP_LINK_ALLOWED_HOSTS`. Browser deployments
-must configure the same exact origins in both `PANELAPP_LINK_ALLOWED_ORIGINS`
-and `PANELAPP_LINK_CORS_ORIGINS`; transport validation and browser CORS are
-independent controls.
-
-See [`docs/data-lifecycle.md`](docs/data-lifecycle.md) for data freshness, caching,
-and how each tool maps to the live API endpoints.
-
-## Development
-
-```bash
-make install      # install project + dev dependencies (uv sync --group dev)
-make ci-local     # format-check, lint, file-size budget, typecheck, fast tests
-make test         # run tests (excludes integration)
-make test-cov     # run tests with coverage (gate: 85%)
-make lint         # ruff lint
-make lint-loc     # enforce the per-file line budget (scripts/check_file_size.py)
-make typecheck    # mypy strict
-```
-
-`make ci-local` is the gate to run before every commit. The project uses `uv`,
-Ruff (100 cols), mypy strict, and a per-file line budget enforced by
-`scripts/check_file_size.py`. Integration tests (`-m integration`) hit the live
-PanelApp APIs and are excluded from the default runs. Agentic coding tools should
-follow `AGENTS.md`; Claude Code also loads the lean `CLAUDE.md`.
-
-## Docker deployment
-
-The image is **stateless** — a pure live-API client with no database and no
-volume, so the container serves traffic almost immediately:
-
-```bash
-docker compose -f docker/docker-compose.yml up -d
-curl http://localhost:8000/health
-```
-
-The host port defaults to `8000`; override it with `PANELAPP_LINK_HOST_PORT`
-(e.g. `PANELAPP_LINK_HOST_PORT=9000 docker compose -f docker/docker-compose.yml
-up -d`). The image sets a 6h cache TTL (`PANELAPP_LINK_DATA__CACHE_TTL=21600`).
-
-For production, layer the prod overlay (no published ports, security hardening,
-resource limits):
-
-```bash
-docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml up -d
-```
-
-Data freshness and caching are documented in
-[`docs/data-lifecycle.md`](docs/data-lifecycle.md).
-
-## License & citation
-
-- **Code:** MIT — see [`LICENSE`](LICENSE).
-- **Data:** Genomics England PanelApp and PanelApp Australia, under their
-  respective terms.
-
-Cite PanelApp as:
+**Citation** — cite the panels you used:
 
 > **Genomics England PanelApp** — Martin AR, Williams E, Foulger RE, et al.
 > PanelApp crowdsources expert knowledge to establish consensus diagnostic gene
@@ -254,19 +120,23 @@ Cite PanelApp as:
 > **PanelApp Australia** — Australian Genomics PanelApp
 > ([panelapp-aus.org](https://panelapp-aus.org)).
 
-## Acknowledgments
+## Documentation
 
-- [Genomics England PanelApp](https://panelapp.genomicsengland.co.uk/) and
-  [PanelApp Australia](https://panelapp-aus.org/), and the expert reviewers who
-  curate the panels.
-- [Model Context Protocol](https://modelcontextprotocol.io/),
-  [FastMCP](https://github.com/jlowin/fastmcp),
-  [FastAPI](https://fastapi.tiangolo.com/), and
-  [Pydantic](https://pydantic.dev/).
+- [Usage](docs/usage.md) — canonical workflows, common arguments, `response_mode` guidance, the citation contract, and the `panelapp://` resources.
+- [Architecture](docs/architecture.md) — the live-API + cache design, layers, per-tool API mapping, error taxonomy, and observability.
+- [Data freshness & caching](docs/data-lifecycle.md) — what is cached, and how the client stays polite to a rate-limiting upstream.
+- [Configuration](docs/configuration.md) — every `PANELAPP_LINK_*` variable, plus the Host / Origin / CORS boundary.
+- [Deployment](docs/deployment.md) — connecting MCP clients, the Docker stacks, and the hardened production overlay.
+- [Changelog](CHANGELOG.md) — released versions.
 
----
+## Contributing
 
-**Research use only.** PanelApp-Link is a research tool and must not be used for
-diagnosis, treatment, triage, patient management, or clinical decision support.
-PanelApp data is not intended for direct diagnostic use or medical
-decision-making without review by a genetics professional.
+See [`AGENTS.md`](AGENTS.md) for engineering conventions, the per-file line
+budget, and the testing layout. `make ci-local` is the definition-of-done gate:
+format, lint, line budget, README standard, mypy, and tests.
+
+## License
+
+[MIT](LICENSE) © Bernt Popp — code only. **PanelApp data** remains under the
+terms of Genomics England PanelApp and of PanelApp Australia respectively; see
+[Data & provenance](#data--provenance).

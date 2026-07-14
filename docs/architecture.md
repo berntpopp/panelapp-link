@@ -207,10 +207,14 @@ PanelApp keeps a panel's latest (possibly in-progress) version plus a separately
 
 ## Regions
 
-The `region` argument is `uk` | `australia` | `both` (default `both`). Search and
-gene tools span both regions and tag each result with its region; `get_panel` and
-`get_panel_genes` take a single region because a panel id is region-scoped. The
-gene tools aggregate a gene's presence across both regions on the fly.
+The `region` argument is `uk` | `australia` | `both`. It defaults to `both` on the
+search and gene tools (`search_panels`, `get_gene_panels`, `get_panels_for_genes`,
+`resolve_gene`), which span both regions and tag each result with its region.
+`get_panel` and `get_panel_genes` **require** a single concrete region (`uk` or
+`australia`) — it has no default, and `both` is rejected with `invalid_input` —
+because a panel id is region-scoped. `compare_panels` has no top-level `region`:
+each `panels[]` ref carries its own. The gene tools aggregate a gene's presence
+across both regions on the fly.
 
 ## Error taxonomy
 
