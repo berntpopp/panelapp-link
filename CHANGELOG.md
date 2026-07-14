@@ -5,6 +5,72 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `get_panel` and `get_panel_genes` advertised `region` as
+  `"uk" | "australia" | "both"` while the service rejects `"both"` (panel ids are
+  per-region). A client that read the input schema, saw `both` was a legal enum
+  value, and sent it, paid a round trip for an `invalid_input` error. The
+  advertised enum is now exactly the two values the runtime accepts, so the call
+  is rejected at the schema boundary. The service-layer guards stay as defence in
+  depth (`PanelAppService` is also a public Python API). Research use only; not
+  for clinical decision support.
+
+### Changed
+
+- `compare_panels` now advertises a typed `panels[]` ref
+  (`{panel_id: int, region: "uk" | "australia"}`, 2-5 items) instead of a freeform
+  `dict`, so an agent reads the ref contract from the schema instead of
+  discovering it from a runtime error. The caller-visible error envelope is
+  unchanged (`invalid_input`); its `field_errors[].field` now pins the offending
+  ref (e.g. `panels.0.region`). Extra keys on a ref are still accepted and stripped
+  (a panel row from a `search_panels` result can be passed straight back), and
+  `panel_id` still accepts a stringified integer.
+- An `invalid_input` rejected at the schema boundary now names the allowed values
+  (e.g. ``Allowed: 'uk' or 'australia'``) instead of only "Value is not one of the
+  allowed options", so a caller still learns what to send. The allowed values come
+  from the server's own `Literal` members; the rejected input and pydantic's own
+  message are still never echoed.
+- `get_server_capabilities` and the `panelapp://reference` resource now state that
+  **both** `get_panel` and `get_panel_genes` require a concrete region (they name
+  only `get_panel` before), so an agent reading the prose instead of the schema
+  cannot infer that `get_panel_genes(region="both")` is valid.
+- `get_gene_panels` now **requires** `gene_symbol` in its schema. PanelApp is queried
+  by gene symbol, so the service always rejected hgnc-only input -- but the schema
+  advertised `gene_symbol` as optional, which made `get_gene_panels(hgnc_id=...)`
+  schema-valid and then runtime-rejected. `hgnc_id` remains an optional filter over
+  the hits. The service guard stays as defence in depth.
+- Only `get_panelapp_diagnostics` declares `headline` in its output schema; the other
+  eight tools advertised the field in the shared envelope but never emitted it.
+
+### Documentation
+
+- Removed the HGNC-lookup fiction from **every** surface. This server has no HGNC
+  index: PanelApp is queried by gene symbol (`GET /genes/?entity_name=SYMBOL`), so an
+  HGNC id is not a query key anywhere. The server instructions offered "resolve_gene
+  to normalize a symbol/HGNC id", the capabilities called `hgnc_id` a "disambiguation
+  filter", and `AGENTS.md` listed an HGNC CURIE as a gene identifier. All corrected;
+  `hgnc_id` is documented as what it is -- an optional filter over `get_gene_panels`
+  hits.
+- `resolve_gene` no longer claims disambiguation: `matches[]` always holds exactly the
+  one rolled-up gene (there is no ambiguity branch, flag, or error code).
+- Search is documented as what it is: every query token must word-prefix-match a whole
+  word (so `renal` does not match `adrenal`), ranked name > relevant disorders >
+  disease group. It was described as "substring" matching (`docs/architecture.md`,
+  `docs/data-lifecycle.md`) and as "FTS" (`docs/usage.md`, `panelapp://usage`).
+- `AGENTS.md` now states the concrete-region rule for `get_panel` / `get_panel_genes`.
+- `docs/superpowers/` is marked as a historical design record (it describes an
+  `AmbiguousQueryError` and an hgnc lookup that were never built).
+- Corrected four contract claims that the runtime does not honour: `resolve_gene`
+  never accepted an `hgnc_id` argument (README, `docs/usage.md`); `get_gene_panels`
+  is not cursor-paged (`panelapp://usage`, `panelapp://reference`); only the
+  diagnostics response carries a `headline` (`docs/usage.md`); and `ambiguous_query`
+  is not an error code the server can emit, while `limit_exceeded` (which it does
+  emit) was missing from the taxonomy (`docs/architecture.md`,
+  `panelapp://reference`). Guarded by `tests/unit/test_docs_contract.py`, which
+  derives every claim from the live schemas / capabilities.
 ## [0.5.7] - 2026-07-14
 
 ### Fixed

@@ -28,6 +28,24 @@ _MIN_CONFIDENCE = Annotated[
     ConfidenceLabel | None,
     Field(description="green | amber | red rank floor; default no filter."),
 ]
+# PanelApp is queried by ``entity_name`` (the gene SYMBOL): an hgnc id alone cannot
+# drive the query, and the service rejects hgnc-only input. So gene_symbol is REQUIRED
+# in the schema -- advertising it as optional made `get_gene_panels(hgnc_id=...)`
+# schema-valid and then runtime-rejected, the same schema-vs-runtime divergence this
+# module's region enum had. hgnc_id remains an OPTIONAL filter over the hits.
+_GENE_SYMBOL = Annotated[
+    str,
+    Field(description="Approved gene symbol (e.g. PKD1). Required: PanelApp queries by symbol."),
+]
+_HGNC_FILTER = Annotated[
+    str | None,
+    Field(
+        description=(
+            "HGNC CURIE (e.g. HGNC:1100). OPTIONAL filter over the hits -- it cannot "
+            "stand alone as a query; pass gene_symbol."
+        )
+    ),
+]
 
 
 def register_gene_tools(mcp: FastMCP) -> None:
@@ -46,8 +64,8 @@ def register_gene_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_gene_panels(
-        gene_symbol: str | None = None,
-        hgnc_id: str | None = None,
+        gene_symbol: _GENE_SYMBOL,
+        hgnc_id: _HGNC_FILTER = None,
         region: _REGION = "both",
         min_confidence: _MIN_CONFIDENCE = None,
         response_mode: _MODE = "compact",
@@ -81,9 +99,11 @@ def register_gene_tools(mcp: FastMCP) -> None:
         tags={"gene", "search"},
         description=(
             "Resolve free text or an approved symbol to a single rolled-up PanelApp "
-            "gene (symbol, hgnc id, panel count, regions, and max_confidence_label -- "
-            "the strongest traffic-light label across panels). Pass query or "
-            "gene_symbol. region (uk|australia|both, default both) scopes the lookup. "
+            "gene. The gene reports its symbol, hgnc id, panel count, regions, and "
+            "max_confidence_label (the strongest traffic-light label across panels); "
+            "matches[] always holds exactly that one gene. Pass query or gene_symbol. "
+            "PanelApp indexes genes by symbol, so an HGNC id is not a lookup key here. "
+            "region (uk|australia|both, default both) scopes the lookup. "
             "Follow up with get_gene_panels to list the panels the gene appears on."
         ),
     )

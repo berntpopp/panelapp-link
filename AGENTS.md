@@ -96,7 +96,10 @@ adding more behavior. Grandfather only via `.loc-allowlist`.
 - **Regions / base URLs (no auth):**
   - UK — `https://panelapp.genomicsengland.co.uk/api/v1`
   - Australia — `https://panelapp-aus.org/api/v1`
-  - The `region` argument is `uk` | `australia` | `both` (default `both`).
+  - The `region` argument is `uk` | `australia` | `both` (default `both`) on the
+    fan-out tools. `get_panel` / `get_panel_genes` **require** a concrete region
+    (`uk` | `australia`) and their schema does not offer `both`: a panel id is
+    per-region. `compare_panels` carries a concrete region per `panels[]` ref.
 - **Live API per query (DRF paging on `next`):**
   - `get_gene_panels` / `resolve_gene` → `GET /genes/?entity_name=SYMBOL`
     (one call per region; each result carries the full `panel` object).
@@ -128,5 +131,10 @@ adding more behavior. Grandfather only via `.loc-allowlist`.
   filters by rank (green = only green; amber = amber + green; red = all).
 - **Versioning:** each panel keeps its **latest** version; `signed_off_version`
   and `signed_off_date` are read from `/panels/signedoff/`.
-- **Identifiers:** gene = approved symbol or HGNC CURIE (e.g. `HGNC:1100`).
+- **Identifiers:** a gene is addressed by its **approved symbol** only. PanelApp
+  indexes genes by symbol (`GET /genes/?entity_name=SYMBOL`) and offers no HGNC
+  index, so there is **no HGNC lookup in this server**: `gene_symbol` is required on
+  `get_gene_panels`, `resolve_gene` takes no `hgnc_id`, and `hgnc_id` is only an
+  optional filter over `get_gene_panels` hits. An HGNC CURIE (e.g. `HGNC:1100`)
+  appears in responses as an identifier of the resolved gene, never as a query key.
 - Research use only; not for clinical decision support.

@@ -120,7 +120,8 @@ well under the limit.
      added by the MCP wrapper).
    - `_live_helpers.py` — small, stateless transforms kept out of the service for
      its line budget and independent testing: confidence normalization, panel
-     substring matching, entity selection by type, and the gene-identity roll-up.
+     word-prefix matching + field-weighted scoring, entity selection by type, and
+     the gene-identity roll-up.
    - `shaping.py` — `response_mode` shaping across minimal / compact / standard /
      full, plus the `normalize_*` / `shape_*` row helpers.
 
@@ -218,8 +219,11 @@ across both regions on the fly.
 
 ## Error taxonomy
 
-`invalid_input`, `not_found`, `ambiguous_query`, `upstream_unavailable` (API
-fetch failure), `rate_limited` (429/403 from PanelApp), `internal_error`. Error
+`invalid_input`, `not_found`, `upstream_unavailable` (API fetch failure),
+`rate_limited` (429/403 from PanelApp), `limit_exceeded` (untrusted-text size /
+count cap), `internal_error`. This is the same list `get_server_capabilities`
+advertises as `error_codes_list`, and it is exactly what `envelope._classify`
+emits — no other code is ever returned. Error
 details are masked; the base `_meta` carries the research-use and license
 markers, and error envelopes still hand back recovery `next_commands`.
 

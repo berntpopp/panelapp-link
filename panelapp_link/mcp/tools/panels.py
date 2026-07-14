@@ -15,7 +15,13 @@ from panelapp_link.mcp.schemas import (
     SEARCH_PANELS_SCHEMA,
 )
 from panelapp_link.mcp.service_adapters import get_panelapp_service
-from panelapp_link.models.enums import ConfidenceLabel, EntityType, Region, ResponseMode
+from panelapp_link.models.enums import (
+    ConfidenceLabel,
+    EntityType,
+    Region,
+    RegionConcrete,
+    ResponseMode,
+)
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -28,8 +34,10 @@ _REGION = Annotated[
     Region,
     Field(description="uk (Genomics England) | australia | both (default)."),
 ]
+# Panel ids are per-region, so the advertised enum is ("uk", "australia") -- 'both'
+# is rejected by the schema, not after a round trip through the service.
 _REGION_CONCRETE = Annotated[
-    Region,
+    RegionConcrete,
     Field(description="uk (Genomics England) | australia. Panel ids are per-region; not 'both'."),
 ]
 

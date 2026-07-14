@@ -80,20 +80,42 @@ _PYDANTIC_REASONS: dict[str, str] = {
     "enum": "Value is not one of the allowed options.",
 }
 
-# Pydantic error types whose ``loc`` IS the caller-chosen (arbitrary) argument
-# name; that name is redacted rather than echoed.
+# Pydantic error types whose ``loc`` LEAF is the caller-chosen (arbitrary) argument
+# name; that leaf is redacted rather than echoed.
 _UNKNOWN_ARG_TYPES = {"unexpected_keyword_argument", "extra_forbidden"}
+
+# Enum/literal errors: pydantic renders ``ctx['expected']`` from OUR OWN Literal
+# members, so it is server-authored -- the one pydantic-supplied string safe to
+# surface (unlike ``msg``/``input``, which carry caller prose). Length-capped.
+_ENUM_ERROR_TYPES = {"literal_error", "enum"}
+_MAX_ALLOWED_CHARS = 160
+
+
+def _allowed_options(err: ErrorDetails) -> str | None:
+    """The allowed values for an enum/literal error, or None for other error types."""
+    if str(err.get("type", "")) not in _ENUM_ERROR_TYPES:
+        return None
+    expected = (err.get("ctx") or {}).get("expected")
+    if not isinstance(expected, str) or not expected:
+        return None
+    return sanitize_message(expected[:_MAX_ALLOWED_CHARS])
 
 
 def _pydantic_reason(err: ErrorDetails) -> str:
     """Return a FIXED reason for a pydantic arg-validation error.
 
     Never echoes the pydantic ``msg`` or the rejected input value; both can carry
-    caller prose that survives code-point stripping.
+    caller prose that survives code-point stripping. For an enum/literal error the
+    ALLOWED values are appended (server-authored, see ``_allowed_options``) so a
+    caller rejected at the schema boundary still learns what to send instead --
+    the schema-boundary rejection must not be less instructive than the
+    service-layer guidance it now pre-empts.
     """
     etype = str(err.get("type", ""))
     if etype in _PYDANTIC_REASONS:
-        return _PYDANTIC_REASONS[etype]
+        reason = _PYDANTIC_REASONS[etype]
+        allowed = _allowed_options(err)
+        return f"{reason} Allowed: {allowed}." if allowed else reason
     if "parsing" in etype or etype.endswith("_type"):
         return "Wrong type for this argument."
     if "greater" in etype or "less" in etype or "than" in etype:
@@ -106,14 +128,19 @@ def _pydantic_reason(err: ErrorDetails) -> str:
 def _safe_pydantic_field(err: ErrorDetails) -> str:
     """Return a safe field name for a pydantic error.
 
-    An unexpected/unknown keyword argument's ``loc`` is the caller-chosen name
-    (arbitrary prose), so it is redacted to a fixed placeholder. A declared-field
-    ``loc`` is server-defined and safe (code-point stripped defensively).
+    A declared-field ``loc`` is server-defined and safe (code-point stripped
+    defensively). For an unexpected/unknown keyword argument the loc's LEAF is the
+    caller-chosen name -- arbitrary prose that survives code-point stripping -- so it
+    is never echoed; only the server-defined PREFIX is kept, which still locates the
+    failure (a hostile key inside ``panels[0]`` reports as ``panels.0``). With no safe
+    prefix there is nothing left to name: ``<unknown>``.
     """
+    loc = tuple(err.get("loc", ()))
     if str(err.get("type", "")) in _UNKNOWN_ARG_TYPES:
-        return "<unknown>"
-    loc = ".".join(str(p) for p in err.get("loc", ())) or "input"
-    return sanitize_message(loc)
+        loc = loc[:-1]  # drop the caller-chosen leaf; keep any declared prefix
+        if not loc:
+            return "<unknown>"
+    return sanitize_message(".".join(str(p) for p in loc) or "input")
 
 
 def _sanitize_tree(value: Any) -> Any:
