@@ -26,9 +26,13 @@ upstream data.
 
 ## Common arguments
 
-- **`region`** — `uk` | `australia` | `both` (default `both`). Search and gene
-  tools span both regions and tag each result with its region. `get_panel` takes a
-  single region (`uk` | `australia`) because a panel id is region-scoped.
+- **`region`** — `uk` | `australia` | `both`. Defaults to `both` on the search and
+  gene tools (`search_panels`, `get_gene_panels`, `get_panels_for_genes`,
+  `resolve_gene`), which span both regions and tag each result with its region.
+  `get_panel` and `get_panel_genes` **require** a single concrete region (`uk` |
+  `australia`) — there is no default, and `both` is rejected — because a panel id
+  is region-scoped. `compare_panels` has no top-level `region`; each `panels[]`
+  ref carries its own.
 - **`response_mode`** — `minimal` | `compact` (default) | `standard` | `full`.
   Controls payload size; start at `compact` and widen only when needed.
 - **`min_confidence`** — `green` | `amber` | `red` (entity tools). Filters by

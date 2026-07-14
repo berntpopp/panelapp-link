@@ -81,11 +81,16 @@ unprefixed per Tool-Naming Standard v1; behind
 namespaced under the `panelapp` token as `panelapp_<tool>` — e.g.
 `panelapp_search_panels`.
 
-Data tools take `region` (`uk` | `australia` | `both`, default `both`) and
-`response_mode` (`minimal` | `compact` | `standard` | `full`, default `compact`);
-entity tools take `min_confidence`, which filters by traffic-light rank (green =
-only green; amber = amber + green; red = all). Workflows and the citation
-contract: [Usage](docs/usage.md).
+`region` (`uk` | `australia` | `both`) defaults to `both` on the tools that fan
+out across both instances — `search_panels`, `get_gene_panels`,
+`get_panels_for_genes`, `resolve_gene`. A panel id is region-scoped, so
+`get_panel` and `get_panel_genes` instead **require** a single concrete region
+(`uk` or `australia`). `compare_panels` takes no top-level `region` — each ref in
+`panels[]` carries its own. Every data tool takes `response_mode` (`minimal` |
+`compact` | `standard` | `full`, default `compact`), and the gene/entity tools
+take `min_confidence`, which filters by traffic-light rank (green = only green;
+amber = amber + green; red = all). Workflows and the citation contract:
+[Usage](docs/usage.md).
 
 ## Data & provenance
 
