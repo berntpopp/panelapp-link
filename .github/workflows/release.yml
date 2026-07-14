@@ -35,6 +35,12 @@ jobs:
         run: make ci-local
 
       - name: Validate production Compose config
+        # The prod overlay pins a digest-addressed image and fails closed when it is unset,
+        # so this step has failed on every release since that overlay landed. Rendering the
+        # model only needs a syntactically valid reference -- nothing is pulled here -- so
+        # pass the same zero-digest placeholder the fleet's other repos use.
+        env:
+          PANELAPP_LINK_IMAGE: ghcr.io/berntpopp/panelapp-link@sha256:0000000000000000000000000000000000000000000000000000000000000000
         run: docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml config
 
       - name: Build release Docker image
