@@ -33,6 +33,11 @@ async def test_compare_panels_self_overlap(mcp_client) -> None:
 
 
 async def test_compare_panels_region_both_rejected(mcp_client) -> None:
+    """A 'both' ref is rejected -- now by the schema (`panels[]` is a typed ref).
+
+    Same caller-visible envelope as before; the field is the pydantic location of
+    the offending ref, which pins the bad element instead of just naming `region`.
+    """
     async with mcp_client as client:
         res = await client.call_tool(
             "compare_panels",
@@ -42,7 +47,7 @@ async def test_compare_panels_region_both_rejected(mcp_client) -> None:
     body = res.structured_content
     assert body["success"] is False
     assert body["error_code"] == "invalid_input"
-    assert body["field_errors"][0]["field"] == "region"
+    assert body["field_errors"][0]["field"] == "panels.0.region"
 
 
 async def test_get_panels_for_genes_mixed(mcp_client) -> None:

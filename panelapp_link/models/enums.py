@@ -14,6 +14,13 @@ ResponseMode = Literal["minimal", "compact", "standard", "full"]
 # Data region. "both" queries Genomics England UK and PanelApp Australia.
 Region = Literal["uk", "australia", "both"]
 
+# A single PanelApp instance. Panel ids are per-region, so the panel-scoped tools
+# take exactly one concrete region -- "both" is not a panel id's namespace. Kept a
+# separate Literal (not just a description) so the advertised JSON-Schema enum is
+# what the runtime accepts: the caller is rejected at the schema boundary, not
+# after a round trip.
+RegionConcrete = Literal["uk", "australia"]
+
 # Entity kind within a panel. "all" returns genes, regions, and STRs together.
 EntityType = Literal["gene", "region", "str", "all"]
 
@@ -22,5 +29,6 @@ ConfidenceLabel = Literal["green", "amber", "red"]
 
 RESPONSE_MODES: tuple[ResponseMode, ...] = ("minimal", "compact", "standard", "full")
 REGIONS: tuple[Region, ...] = ("uk", "australia", "both")
+CONCRETE_REGIONS: tuple[RegionConcrete, ...] = ("uk", "australia")
 ENTITY_TYPES: tuple[EntityType, ...] = ("gene", "region", "str", "all")
 CONFIDENCE_LABELS: tuple[ConfidenceLabel, ...] = ("green", "amber", "red")

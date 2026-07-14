@@ -12,9 +12,11 @@ import asyncio
 from typing import Any, Protocol
 
 from panelapp_link.exceptions import InvalidInputError, NotFoundError
+from panelapp_link.models.enums import CONCRETE_REGIONS
 
-_MIN_PANELS = 2
-_MAX_PANELS = 5
+#: Public so the MCP tool can advertise the same bounds it is validated against.
+MIN_PANELS = 2
+MAX_PANELS = 5
 
 
 class _Service(Protocol):
@@ -47,15 +49,21 @@ def _ref_key(ref: dict[str, Any]) -> str:
 
 
 def _validate_refs(panel_refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    if not (_MIN_PANELS <= len(panel_refs) <= _MAX_PANELS):
+    """Guard the refs at the service boundary.
+
+    The MCP tool now advertises (and pydantic enforces) this same shape, but this
+    is a public Python API reachable from other callers too, so the checks stay as
+    defence in depth.
+    """
+    if not (MIN_PANELS <= len(panel_refs) <= MAX_PANELS):
         raise InvalidInputError(
-            f"compare_panels needs {_MIN_PANELS}-{_MAX_PANELS} panels.", field="panels"
+            f"compare_panels needs {MIN_PANELS}-{MAX_PANELS} panels.", field="panels"
         )
     out: list[dict[str, Any]] = []
     for ref in panel_refs:
         region = ref.get("region")
         panel_id = ref.get("panel_id")
-        if region not in ("uk", "australia"):
+        if region not in CONCRETE_REGIONS:
             raise InvalidInputError(
                 "region must be 'uk' or 'australia' per panel (panel ids are "
                 "per-region; 'both' is not allowed).",

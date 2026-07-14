@@ -1,10 +1,19 @@
 """End-to-end MCP tool tests via an in-memory fastmcp client.
 
-These build a bare ``FastMCP``, register the tool modules on it, inject a
-respx-backed live :class:`PanelAppService` via ``set_service_for_testing``, and
-drive the tools through an in-memory ``fastmcp.Client``. Each tool's response is
-asserted at the envelope level (``success`` + payload keys). The service methods
-are async; the tool layer awaits them. No live network.
+These build the REAL server (``create_panelapp_mcp()`` -- the one the deployment
+serves, middleware and all), inject a respx-backed live :class:`PanelAppService`
+via ``set_service_for_testing``, and drive the tools through an in-memory
+``fastmcp.Client``. Each tool's response is asserted at the envelope level
+(``success`` + payload keys). The service methods are async; the tool layer awaits
+them. No live network.
+
+The server must be the real one, not a bare ``FastMCP`` + ``register_all_tools``:
+FastMCP validates arguments *before* the tool body runs, so an argument rejected
+by the schema (e.g. ``region="both"`` on ``get_panel``) never reaches
+``run_mcp_tool``. Only ``InputValidationMiddleware`` -- installed by
+``create_panelapp_mcp`` -- turns that pre-body failure into the same
+``invalid_input`` envelope a domain error produces. A bare server would let a raw
+FastMCP error frame through and hide that contract from these tests.
 """
 
 from __future__ import annotations
@@ -12,13 +21,13 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 import pytest
-from fastmcp import Client, FastMCP
+from fastmcp import Client
 
+from panelapp_link.mcp.facade import create_panelapp_mcp
 from panelapp_link.mcp.service_adapters import (
     reset_panelapp_service,
     set_service_for_testing,
 )
-from panelapp_link.mcp.tools import register_all_tools
 from panelapp_link.services.panelapp_service import PanelAppService
 
 pytestmark = pytest.mark.mcp
@@ -26,12 +35,10 @@ pytestmark = pytest.mark.mcp
 
 @pytest.fixture
 async def mcp_client(live_service: PanelAppService) -> AsyncIterator[Client]:
-    """An in-memory fastmcp client with all tools registered + live service injected."""
+    """An in-memory fastmcp client on the real server + live service injected."""
     set_service_for_testing(live_service)
-    mcp: FastMCP = FastMCP("panelapp-link-test")
-    register_all_tools(mcp)
     try:
-        async with Client(mcp) as client:
+        async with Client(create_panelapp_mcp()) as client:
             yield client
     finally:
         set_service_for_testing(None)

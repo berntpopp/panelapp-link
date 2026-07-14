@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `get_panel` and `get_panel_genes` advertised `region` as
+  `"uk" | "australia" | "both"` while the service rejects `"both"` (panel ids are
+  per-region). A client that read the input schema, saw `both` was a legal enum
+  value, and sent it, paid a round trip for an `invalid_input` error. The
+  advertised enum is now exactly the two values the runtime accepts, so the call
+  is rejected at the schema boundary. The service-layer guards stay as defence in
+  depth (`PanelAppService` is also a public Python API). Research use only; not
+  for clinical decision support.
+
+### Changed
+
+- `compare_panels` now advertises a typed `panels[]` ref
+  (`{panel_id: int, region: "uk" | "australia"}`, 2-5 items) instead of a freeform
+  `dict`, so an agent reads the ref contract from the schema instead of
+  discovering it from a runtime error. The caller-visible error envelope is
+  unchanged (`invalid_input`); its `field_errors[].field` now pins the offending
+  ref (e.g. `panels.0.region`).
+
 ## [0.5.5] - 2026-07-13
 
 ### Fixed

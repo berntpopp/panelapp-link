@@ -12,6 +12,7 @@ from panelapp_link.mcp.next_commands import after_compare_panels, after_panels_f
 from panelapp_link.mcp.schemas import COMPARE_PANELS_SCHEMA, GET_PANELS_FOR_GENES_SCHEMA
 from panelapp_link.mcp.service_adapters import get_panelapp_service
 from panelapp_link.models.enums import ConfidenceLabel, Region, ResponseMode
+from panelapp_link.models.inputs import PanelRef
 from panelapp_link.services import aggregations
 
 if TYPE_CHECKING:
@@ -26,9 +27,16 @@ _MIN_CONFIDENCE = Annotated[
     ConfidenceLabel | None,
     Field(description="green | amber | red rank floor; default no filter."),
 ]
+# A typed ref (not a freeform dict) so the advertised schema IS the contract: an
+# agent reads panel_id:int + region:uk|australia and the 2-5 bound up front,
+# instead of discovering them from a runtime invalid_input.
 _PANELS = Annotated[
-    list[dict[str, Any]],
-    Field(description="2-5 panel refs: [{panel_id:int, region:'uk'|'australia'}]."),
+    list[PanelRef],
+    Field(
+        min_length=aggregations.MIN_PANELS,
+        max_length=aggregations.MAX_PANELS,
+        description="2-5 panel refs: [{panel_id:int, region:'uk'|'australia'}].",
+    ),
 ]
 _SYMBOLS = Annotated[
     list[str], Field(description="Approved gene symbols (e.g. PKD1); capped at 20 per call.")
@@ -56,10 +64,14 @@ def register_aggregation_tools(mcp: FastMCP) -> None:
         min_confidence: _MIN_CONFIDENCE = None,
         response_mode: _MODE = "compact",
     ) -> dict[str, Any]:
+        # The service takes plain refs (it is a public Python API with its own
+        # guards); the model is the schema-boundary contract, not a service type.
+        refs = [panel.model_dump() for panel in panels]
+
         async def call() -> dict[str, Any]:
             payload = await aggregations.compare_panels(
                 get_panelapp_service(),
-                panels,
+                refs,
                 min_confidence=min_confidence,
                 response_mode=response_mode,
             )
@@ -69,7 +81,7 @@ def register_aggregation_tools(mcp: FastMCP) -> None:
         return await run_mcp_tool(
             "compare_panels",
             call,
-            context=McpErrorContext("compare_panels", arguments={"panels": panels}),
+            context=McpErrorContext("compare_panels", arguments={"panels": refs}),
             response_mode=response_mode,
         )
 
