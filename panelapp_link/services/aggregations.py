@@ -69,6 +69,10 @@ def _validate_refs(panel_refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "per-region; 'both' is not allowed).",
                 field="region",
             )
+        # NOT dead code: unreachable from MCP (the tool's PanelRef coerces panel_id to
+        # int before this runs -- deliberately, so an LLM caller sending "1207" wins),
+        # but this is a public Python API and a non-MCP caller can still pass anything.
+        # Same rationale as the 'both' guards above: defence in depth, not duplication.
         if not isinstance(panel_id, int):
             raise InvalidInputError("panel_id must be an integer.", field="panel_id")
         out.append({"panel_id": panel_id, "region": region})

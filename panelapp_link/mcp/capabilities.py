@@ -94,8 +94,9 @@ def _static_surface() -> dict[str, Any]:
             "triage a gene list -> get_panels_for_genes(gene_symbols=[...], min_confidence='green')",
         ],
         "parameter_conventions": {
-            "region": "uk (Genomics England) | australia | both (default). get_panel "
-            "requires a single concrete region (uk or australia), not both.",
+            "region": "uk (Genomics England) | australia | both (default). get_panel and "
+            "get_panel_genes require a single concrete region (uk or australia), not both "
+            "-- panel ids are per-region.",
             "gene_symbol": "approved gene symbol (e.g. BRCA1); the query key for "
             "resolve_gene / get_gene_panels",
             "hgnc_id": "HGNC CURIE (e.g. HGNC:1100); OPTIONAL disambiguation filter "

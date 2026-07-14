@@ -32,6 +32,7 @@ from fastmcp import Client
 from panelapp_link.api.client import PanelAppRestClient
 from panelapp_link.config import PanelAppDataConfigModel
 from panelapp_link.exceptions import DownloadError, NotFoundError, RateLimitError
+from panelapp_link.mcp.envelope import _safe_pydantic_field
 from panelapp_link.mcp.facade import create_panelapp_mcp
 from panelapp_link.mcp.service_adapters import reset_panelapp_service, set_service_for_testing
 from panelapp_link.mcp.untrusted_content import UntrustedTextLimitError
@@ -233,9 +234,33 @@ async def test_hostile_unknown_arg_name_is_enveloped_and_redacted() -> None:
     _assert_clean(mirror)
 
 
+def test_unknown_arg_field_keeps_the_declared_prefix_but_never_the_caller_key() -> None:
+    """The loc -> field mapping keeps every SERVER-defined part and drops only the leaf.
+
+    A hostile key nested inside a declared argument (``panels[0]``) must still be
+    located for the caller -- the ``panels.0`` prefix is server-defined and safe --
+    while the caller-chosen leaf is never echoed. A top-level unknown argument has no
+    safe prefix at all, so there is nothing to name: it stays ``<unknown>`` (the
+    redaction pinned by ``test_hostile_unknown_arg_name_is_enveloped_and_redacted``).
+    """
+    nested = cast("Any", {"type": "extra_forbidden", "loc": ("panels", 0, "evil_key"), "msg": "x"})
+    assert _safe_pydantic_field(nested) == "panels.0"
+
+    top_level = cast("Any", {"type": "unexpected_keyword_argument", "loc": ("evil_key",)})
+    assert _safe_pydantic_field(top_level) == "<unknown>"
+
+    declared = cast("Any", {"type": "literal_error", "loc": ("region",)})
+    assert _safe_pydantic_field(declared) == "region"
+
+
 async def test_bad_type_on_declared_field_uses_fixed_reason() -> None:
-    """A bad value on a DECLARED field keeps the (server-defined) field name but
-    maps the pydantic message to a FIXED reason (never echoes pydantic prose)."""
+    """A bad value on a DECLARED field keeps the (server-defined) field name and a
+    FIXED reason, listing the allowed options.
+
+    The reason is composed only of server-authored text: the fixed reason plus
+    pydantic's ``ctx['expected']``, which it renders from OUR OWN ``Literal`` members.
+    The pydantic ``msg`` and the rejected ``input`` are still never echoed.
+    """
     set_service_for_testing(None)
     async with Client(create_panelapp_mcp()) as client:
         res = await client.call_tool(
@@ -247,7 +272,13 @@ async def test_bad_type_on_declared_field_uses_fixed_reason() -> None:
     assert structured["error_code"] == "invalid_input"
     fe = structured["field_errors"][0]
     assert fe["field"] == "response_mode"
-    assert fe["reason"] == "Value is not one of the allowed options."
+    assert fe["reason"].startswith("Value is not one of the allowed options.")
+    # the allowed values are surfaced (server-authored) ...
+    for mode in ("minimal", "compact", "standard", "full"):
+        assert mode in fe["reason"]
+    # ... but never the rejected input, nor pydantic's own message prose
+    assert "123" not in fe["reason"]
+    assert "Input should be" not in fe["reason"]
     assert structured == mirror
 
 

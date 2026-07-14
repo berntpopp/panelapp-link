@@ -24,7 +24,18 @@ class PanelRef(BaseModel):
     panels[] item; keep it plain prose an agent can act on.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    # extra="ignore" (NOT "forbid"): the service accepted a ref carrying extra keys and
+    # stripped it to {panel_id, region}, and an agent will very plausibly hand a whole
+    # panel row from a search_panels / get_panel result straight back to compare_panels.
+    # Forbidding extras would break that -- and would ALSO be the same schema-vs-runtime
+    # divergence in reverse, since pydantic advertises additionalProperties:false only
+    # for "forbid". Ignoring them keeps the advertised schema and the runtime identical.
+    #
+    # panel_id stays a plain `int`, not StrictInt: pydantic coerces "1207" -> 1207, so
+    # the runtime is *more* permissive than the advertised `type: integer`. That is the
+    # safe direction -- a caller that obeys the schema always succeeds -- and LLM callers
+    # do emit stringified integers.
+    model_config = ConfigDict(extra="ignore")
 
     panel_id: int = Field(description="PanelApp panel id (region-scoped).")
     region: RegionConcrete = Field(description="uk (Genomics England) | australia.")

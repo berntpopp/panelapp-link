@@ -25,7 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `dict`, so an agent reads the ref contract from the schema instead of
   discovering it from a runtime error. The caller-visible error envelope is
   unchanged (`invalid_input`); its `field_errors[].field` now pins the offending
-  ref (e.g. `panels.0.region`).
+  ref (e.g. `panels.0.region`). Extra keys on a ref are still accepted and stripped
+  (a panel row from a `search_panels` result can be passed straight back), and
+  `panel_id` still accepts a stringified integer.
+- An `invalid_input` rejected at the schema boundary now names the allowed values
+  (e.g. ``Allowed: 'uk' or 'australia'``) instead of only "Value is not one of the
+  allowed options", so a caller still learns what to send. The allowed values come
+  from the server's own `Literal` members; the rejected input and pydantic's own
+  message are still never echoed.
+- `get_server_capabilities` and the `panelapp://reference` resource now state that
+  **both** `get_panel` and `get_panel_genes` require a concrete region (they name
+  only `get_panel` before), so an agent reading the prose instead of the schema
+  cannot infer that `get_panel_genes(region="both")` is valid.
 
 ## [0.5.5] - 2026-07-13
 
