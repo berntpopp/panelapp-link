@@ -32,8 +32,10 @@ PANELAPP_SERVER_INSTRUCTIONS = (
     "detail and entity-count breakdown -> get_panel_genes for the entities "
     "(genes, regions/CNVs, STRs) with traffic-light confidence and mode of "
     "inheritance. For a gene's footprint across panels use resolve_gene to "
-    "normalize a symbol/HGNC id, then get_gene_panels for every panel it appears "
-    "on across regions, grouped by confidence. Filter entities by confidence "
+    "normalize a gene symbol or free text, then get_gene_panels for every panel it "
+    "appears on across regions, grouped by confidence. PanelApp indexes genes by "
+    "SYMBOL only: there is no HGNC lookup, so gene_symbol drives every gene query "
+    "and hgnc_id is only a filter on get_gene_panels results. Filter entities by confidence "
     "with min_confidence (green = green only; amber = amber+green; red = all). "
     "Results are JSON with a `success` flag, `_meta.next_commands`, and a "
     "citation (full recommended citations in full mode; citation_short + "
@@ -44,8 +46,10 @@ PANELAPP_SERVER_INSTRUCTIONS = (
 )
 
 PANELAPP_USAGE_NOTES = (
-    "Find panels with search_panels (FTS over name, relevant disorders, disease "
-    "group), then get_panel for a single panel's detail (region must be uk or "
+    "Find panels with search_panels (every query token must word-prefix-match a whole "
+    "word in the panel name, relevant disorders, or disease group -- so 'renal' does "
+    "not match 'adrenal'; ranking weights name > relevant_disorders > disease group), "
+    "then get_panel for a single panel's detail (region must be uk or "
     "australia, not both) and get_panel_genes for its entities. Filter entities "
     "by entity_type (gene | region | str | all) and min_confidence "
     "(green | amber | red). For a gene-centric view use resolve_gene then "

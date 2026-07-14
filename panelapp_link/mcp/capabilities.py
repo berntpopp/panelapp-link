@@ -99,8 +99,9 @@ def _static_surface() -> dict[str, Any]:
             "-- panel ids are per-region.",
             "gene_symbol": "approved gene symbol (e.g. BRCA1); the query key for "
             "resolve_gene / get_gene_panels",
-            "hgnc_id": "HGNC CURIE (e.g. HGNC:1100); OPTIONAL disambiguation filter "
-            "for get_gene_panels results -- gene_symbol drives the query",
+            "hgnc_id": "HGNC CURIE (e.g. HGNC:1100); OPTIONAL filter over "
+            "get_gene_panels results. PanelApp indexes genes by symbol only, so an "
+            "HGNC id is never a query key -- gene_symbol (required) drives the query",
             "panel_id": "integer PanelApp panel id within a region",
             "entity_type": "gene | region | str | all (get_panel_genes; default gene)",
             "min_confidence": "green | amber | red; filters entities by rank "

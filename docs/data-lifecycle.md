@@ -40,8 +40,11 @@ disables caching entirely.
 ## How each tool maps to the API
 
 - **`search_panels`** — fetches the cached full panel list per region
-  (`GET /panels/`) and filters it **in memory** (case-insensitive substring over
-  name, relevant disorders, disease group, and disease sub-group); PanelApp has
+  (`GET /panels/`) and filters it **in memory**: every query token must
+  word-prefix-match a whole word within a single field (case-insensitive), so
+  `renal` does not match `adrenal`. The score is the best matching field's weight
+  — name (3) > relevant disorders (2) > disease group / sub-group (1)
+  (`_live_helpers.panel_match_score`). PanelApp has
   no usable server-side panel search. Signed-off version/date are merged from the
   cached `GET /panels/signedoff/` listing.
 - **`get_panel`** — `GET /panels/{id}/` for a single region, with signed-off

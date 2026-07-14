@@ -120,7 +120,8 @@ well under the limit.
      added by the MCP wrapper).
    - `_live_helpers.py` — small, stateless transforms kept out of the service for
      its line budget and independent testing: confidence normalization, panel
-     substring matching, entity selection by type, and the gene-identity roll-up.
+     word-prefix matching + field-weighted scoring, entity selection by type, and
+     the gene-identity roll-up.
    - `shaping.py` — `response_mode` shaping across minimal / compact / standard /
      full, plus the `normalize_*` / `shape_*` row helpers.
 

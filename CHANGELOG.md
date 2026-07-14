@@ -47,6 +47,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Removed the HGNC-lookup fiction from **every** surface. This server has no HGNC
+  index: PanelApp is queried by gene symbol (`GET /genes/?entity_name=SYMBOL`), so an
+  HGNC id is not a query key anywhere. The server instructions offered "resolve_gene
+  to normalize a symbol/HGNC id", the capabilities called `hgnc_id` a "disambiguation
+  filter", and `AGENTS.md` listed an HGNC CURIE as a gene identifier. All corrected;
+  `hgnc_id` is documented as what it is -- an optional filter over `get_gene_panels`
+  hits.
+- `resolve_gene` no longer claims disambiguation: `matches[]` always holds exactly the
+  one rolled-up gene (there is no ambiguity branch, flag, or error code).
+- Search is documented as what it is: every query token must word-prefix-match a whole
+  word (so `renal` does not match `adrenal`), ranked name > relevant disorders >
+  disease group. It was described as "substring" matching (`docs/architecture.md`,
+  `docs/data-lifecycle.md`) and as "FTS" (`docs/usage.md`, `panelapp://usage`).
+- `AGENTS.md` now states the concrete-region rule for `get_panel` / `get_panel_genes`.
+- `docs/superpowers/` is marked as a historical design record (it describes an
+  `AmbiguousQueryError` and an hgnc lookup that were never built).
 - Corrected four contract claims that the runtime does not honour: `resolve_gene`
   never accepted an `hgnc_id` argument (README, `docs/usage.md`); `get_gene_panels`
   is not cursor-paged (`panelapp://usage`, `panelapp://reference`); only the

@@ -99,9 +99,11 @@ def register_gene_tools(mcp: FastMCP) -> None:
         tags={"gene", "search"},
         description=(
             "Resolve free text or an approved symbol to a single rolled-up PanelApp "
-            "gene (symbol, hgnc id, panel count, regions, and max_confidence_label -- "
-            "the strongest traffic-light label across panels). Pass query or "
-            "gene_symbol. region (uk|australia|both, default both) scopes the lookup. "
+            "gene. The gene reports its symbol, hgnc id, panel count, regions, and "
+            "max_confidence_label (the strongest traffic-light label across panels); "
+            "matches[] always holds exactly that one gene. Pass query or gene_symbol. "
+            "PanelApp indexes genes by symbol, so an HGNC id is not a lookup key here. "
+            "region (uk|australia|both, default both) scopes the lookup. "
             "Follow up with get_gene_panels to list the panels the gene appears on."
         ),
     )
