@@ -28,18 +28,20 @@ def is_hgnc_curie(value: str) -> bool:
     return bool(_HGNC_CURIE_RE.match(value))
 
 
-def reject_hgnc_curie(symbol: str) -> None:
+def reject_hgnc_curie(symbol: str, *, field: str) -> None:
     """Reject an HGNC CURIE used as the gene-lookup key (issue #25 D3).
 
-    PanelApp resolves genes by SYMBOL; a CURIE in the gene_symbol/query position is
-    not a lookup key here. ``get_gene_panels``'s ``hgnc_id`` is a separate optional
-    result FILTER and is unaffected.
+    PanelApp resolves genes by SYMBOL; a CURIE in the lookup position is not a key
+    here. ``field`` MUST name the caller's actual lookup parameter (``query`` for
+    resolve_gene, ``gene_symbol`` for get_gene_panels) so ``field_errors`` never
+    reports a parameter the calling tool does not expose. ``get_gene_panels``'s
+    ``hgnc_id`` is a separate optional result FILTER and is unaffected.
     """
     if is_hgnc_curie(symbol):
         raise InvalidInputError(
-            "An HGNC id is not a gene-lookup key here; PanelApp is queried by "
-            "approved gene symbol. Pass gene_symbol (e.g. SCN1A).",
-            field="gene_symbol",
+            "An HGNC id is not a gene-lookup key here; PanelApp is queried by an "
+            "approved gene symbol (e.g. SCN1A).",
+            field=field,
         )
 
 

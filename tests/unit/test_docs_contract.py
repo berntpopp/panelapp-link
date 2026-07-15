@@ -248,7 +248,9 @@ async def test_resolve_gene_really_cannot_resolve_an_hgnc_id(live_service: Any) 
     """
     body = await _call("resolve_gene", {"query": "HGNC:1100"}, live_service)
     assert body["error_code"] == "invalid_input"
-    assert body["field_errors"][0]["field"] == "gene_symbol"
+    # The field names resolve_gene's ACTUAL parameter (query), never a param the tool
+    # does not expose.
+    assert body["field_errors"][0]["field"] == "query"
 
 
 # --- 4. resolve_gene returns exactly one gene; it is not a disambiguator ---------

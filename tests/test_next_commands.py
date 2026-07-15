@@ -120,6 +120,23 @@ class TestRecoveryCommands:
         out = nc.recovery_commands("get_gene_panels", "not_found", {"gene_symbol": "ZZZ"}, None)
         assert out == [{"tool": "resolve_gene", "arguments": {"query": "ZZZ"}}]
 
+    def test_hgnc_mismatch_recovery_uses_the_symbol_not_the_curie(self) -> None:
+        """#25 rework: an hgnc-mismatch not_found must recover with a WORKING call.
+
+        The failing call carried gene_symbol + a non-matching hgnc_id. Recovering with
+        resolve_gene(query=<the HGNC id>) would fail invalid_input (CURIE rejection) --
+        a deterministic 2nd error. Recover with the symbol instead.
+        """
+        out = nc.recovery_commands(
+            "get_gene_panels", "not_found", {"gene_symbol": "SCN1A", "hgnc_id": "HGNC:0000"}, None
+        )
+        assert out == [{"tool": "resolve_gene", "arguments": {"query": "SCN1A"}}]
+
+    def test_recovery_never_seeds_a_symbol_query_from_a_curie(self) -> None:
+        """An HGNC CURIE is never fed into a symbol-query breadcrumb (it would fail)."""
+        out = nc.recovery_commands("get_gene_panels", "not_found", {"hgnc_id": "HGNC:5"}, None)
+        assert out == []
+
     def test_invalid_input_points_to_capabilities(self) -> None:
         out = nc.recovery_commands("get_panel_genes", "invalid_input", {}, "min_confidence")
         assert out == [{"tool": "get_server_capabilities", "arguments": {}}]

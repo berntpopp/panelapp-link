@@ -393,12 +393,18 @@ class PanelAppService:
                 "hgnc_id alone cannot drive the query.",
                 field="gene_symbol",
             )
-        helpers.reject_hgnc_curie(symbol)
+        helpers.reject_hgnc_curie(symbol, field="gene_symbol")
         hid = (hgnc_id or "").strip() or None
-        if hid is not None and not helpers.is_hgnc_curie(hid):
-            raise InvalidInputError(
-                "hgnc_id must be an HGNC CURIE like HGNC:1100.", field="hgnc_id"
-            )
+        if hid is not None:
+            if not helpers.is_hgnc_curie(hid):
+                raise InvalidInputError(
+                    "hgnc_id must be an HGNC CURIE like HGNC:1100.", field="hgnc_id"
+                )
+            # Canonicalise case so the match below is case-insensitive: validation
+            # accepts hgnc:13666 but PanelApp stores HGNC:13666, and a case-sensitive
+            # compare would otherwise 404 a well-formed id (a CURIE is HGNC:<digits>,
+            # so upper() only touches the prefix).
+            hid = hid.upper()
 
         results = await self._gather_gene_results(regions, symbol)
         if not results:
@@ -461,13 +467,17 @@ class PanelAppService:
         lookup. Raises ``NotFoundError`` when nothing matches.
         """
         self._validate_mode(response_mode)
+        # Name the parameter the caller actually supplied so field_errors never points
+        # at a param the calling tool does not expose (the resolve_gene tool takes only
+        # `query`; the service also accepts `gene_symbol`).
+        lookup_field = "gene_symbol" if (gene_symbol or "").strip() else "query"
         symbol = (gene_symbol or "").strip() or (query or "").strip()
         if not symbol:
             raise InvalidInputError(
                 "Provide a gene_symbol or a non-empty query (PanelApp resolves by gene symbol).",
-                field="gene_symbol",
+                field=lookup_field,
             )
-        helpers.reject_hgnc_curie(symbol)
+        helpers.reject_hgnc_curie(symbol, field=lookup_field)
         regions = self._normalize_region(region)
         results = await self._gather_gene_results(regions, symbol)
         if not results:

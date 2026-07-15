@@ -22,6 +22,16 @@ from panelapp_link.exceptions import InvalidInputError, NotFoundError
 async def test_resolve_gene_rejects_hgnc_curie(live_service, curie: str) -> None:
     with pytest.raises(InvalidInputError) as exc:
         await live_service.resolve_gene(query=curie)
+    # Names the resolve_gene tool's ACTUAL param (query), not the nonexistent gene_symbol.
+    assert exc.value.field == "query"
+
+
+async def test_resolve_gene_rejects_hgnc_curie_via_gene_symbol_names_that_param(
+    live_service,
+) -> None:
+    """The service also accepts gene_symbol; then the field names gene_symbol."""
+    with pytest.raises(InvalidInputError) as exc:
+        await live_service.resolve_gene(gene_symbol="HGNC:20")
     assert exc.value.field == "gene_symbol"
 
 
@@ -49,3 +59,9 @@ async def test_malformed_hgnc_id_filter_is_invalid_input(live_service) -> None:
     with pytest.raises(InvalidInputError) as exc:
         await live_service.get_gene_panels(gene_symbol="AAAS", hgnc_id="not-a-curie")
     assert exc.value.field == "hgnc_id"
+
+
+async def test_hgnc_id_filter_match_is_case_insensitive(live_service) -> None:
+    """#25 rework: hgnc:13666 (lowercased) must match the stored HGNC:13666, not 404."""
+    out = await live_service.get_gene_panels(gene_symbol="AAAS", hgnc_id="hgnc:13666")
+    assert out["count"] >= 1
