@@ -13,7 +13,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any, Literal, cast, get_args
 
 from pydantic import ValidationError as PydanticValidationError
 from pydantic_core import ErrorDetails
@@ -49,6 +49,18 @@ _RECOMMENDED_CITATION = (
     f"PanelApp Australia: {RECOMMENDED_CITATION_AU}"
 )
 
+# The closed error-code enum (Response-Envelope Standard v1), harmonized with the
+# behaviour gate's ERROR_CODES set. Nothing outside this is ever surfaced.
+ErrorCode = Literal[
+    "invalid_input",
+    "not_found",
+    "ambiguous_query",
+    "upstream_unavailable",
+    "rate_limited",
+    "internal",
+]
+ERROR_CODES: frozenset[str] = frozenset(get_args(ErrorCode))
+
 # Error codes that are inherently retryable when raised via ``McpToolError``.
 _RETRYABLE_CODES = {"rate_limited", "upstream_unavailable"}
 
@@ -63,7 +75,10 @@ _FIXED_MESSAGES: dict[str, str] = {
         "The requested PanelApp record was not found. "
         "Use search_panels or resolve_gene to find a valid identifier."
     ),
-    "limit_exceeded": (
+    # A response-size cap breach is client-actionable (narrow the request), so it is
+    # surfaced as invalid_input (the closed enum has no dedicated limit code); the
+    # message tells the model exactly how to reformulate.
+    "response_too_large": (
         "The response exceeded the untrusted-text size or count limit. "
         "Re-call with a smaller limit or a lower response_mode."
     ),
@@ -168,10 +183,20 @@ class McpErrorContext:
 
 
 class McpToolError(Exception):
-    """Raised inside a tool body to emit a specific error code/message."""
+    """Raised inside a tool body to emit a specific error code/message.
 
-    def __init__(self, *, error_code: str, message: str) -> None:
+    ``error_code`` is constrained to the closed :data:`ErrorCode` enum -- an
+    unrecognised code must never reach the wire (a client that branches on a code
+    outside the standard cannot recover), so constructing one is a programming
+    error and fails fast.
+    """
+
+    def __init__(self, *, error_code: ErrorCode, message: str) -> None:
         super().__init__(message)
+        if error_code not in ERROR_CODES:
+            raise ValueError(
+                f"error_code {error_code!r} is not in the closed enum {sorted(ERROR_CODES)}"
+            )
         self.error_code = error_code
         self.message = message
 
@@ -215,12 +240,15 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
     forbidden code points by the recursive envelope pass.
     """
     if isinstance(exc, McpToolError):
-        return exc.error_code, exc.message, exc.error_code in _RETRYABLE_CODES
+        # error_code is enum-constrained at construction; coerce defensively in case it
+        # was mutated, so a non-enum code can never reach the wire.
+        code = exc.error_code if exc.error_code in ERROR_CODES else "internal"
+        return code, exc.message, code in _RETRYABLE_CODES
     if isinstance(exc, (DisallowedURLError, ResponseTooLargeError)):
         # A blocked outbound URL/redirect (F-17) is a fixed, opaque, NON-retryable
         # failure: retrying re-issues the identical blocked request. The blocked
         # URL/host is never surfaced (the exception message is already fixed).
-        return "internal_error", "An internal error occurred. The request was not completed.", False
+        return "internal", "An internal error occurred. The request was not completed.", False
     if isinstance(exc, RateLimitError):
         return "rate_limited", "PanelApp API rate limit hit. Try again later.", True
     if isinstance(exc, DownloadError):
@@ -229,9 +257,11 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
         # str(exc) embeds the caller's query/identifier -> use the fixed message.
         return "not_found", _FIXED_MESSAGES["not_found"], False
     if isinstance(exc, UntrustedTextLimitError):
-        # Response-Envelope v1.1 forbids silent omission on a limit breach; surface
-        # it as an explicit typed limit error, never a generic internal_error.
-        return "limit_exceeded", _FIXED_MESSAGES["limit_exceeded"], False
+        # Response-Envelope v1.1 forbids silent omission on a limit breach. The error
+        # code is closed to the six-value enum, which has no dedicated limit code, so
+        # this maps to invalid_input (client-actionable: narrow the request) -- never a
+        # generic, non-actionable internal.
+        return "invalid_input", _FIXED_MESSAGES["response_too_large"], False
     if isinstance(exc, InvalidInputError):
         # exc.message is server-authored (static guidance; the rejected value is not
         # interpolated at the raise sites). exc.field is a fixed schema field name.
@@ -241,13 +271,13 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
         first = exc.errors()[0]
         field = _safe_pydantic_field(first)
         return "invalid_input", f"Invalid input -- `{field}`: {_pydantic_reason(first)}", False
-    return "internal_error", "An internal error occurred. The request was not completed.", False
+    return "internal", "An internal error occurred. The request was not completed.", False
 
 
 def _recovery_action(error_code: str) -> str:
     if error_code in {"rate_limited", "upstream_unavailable"}:
         return "retry_backoff"
-    if error_code in {"invalid_input", "limit_exceeded"}:
+    if error_code == "invalid_input":
         return "reformulate_input"
     if error_code == "not_found":
         return "switch_tool"

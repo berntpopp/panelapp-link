@@ -5,10 +5,61 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-07-15
+
+### Changed
+
+- **BREAKING (`resolve_gene`):** the tool now takes a single required `query`
+  (an approved gene symbol or free text); the redundant, un-exampleable
+  `gene_symbol` alias is dropped. `query` was already `resolve_gene`'s canonical
+  chaining key, and collapsing to one required, example-carrying key makes the
+  contract unambiguous and lets the behaviour gate build a valid call for it.
+  Callers that passed `resolve_gene(gene_symbol=...)` must pass
+  `resolve_gene(query=...)`. `get_gene_panels` still takes `gene_symbol`.
+- **Tool-Schema Documentation Standard v1:** every input property now carries a
+  `description`, every required + array parameter carries `examples`
+  (`gene_symbol`, `panel_id`, `region`, `panels`, `gene_symbols`), closed
+  vocabularies stay `Literal` enums, and bounded numerics (`limit`, `offset`,
+  `panel_id`) declare `ge`/`le`. `doc%` 67 → 100.
+- **Tool-Surface Budget Standard v1:** `output_schema` is suppressed
+  (`output_schema=None`) on every data tool — no model reads `outputSchema`, and a
+  dict return still emits `structuredContent` — and `dereference_schemas=False`
+  keeps `$defs` by reference. Server surface 7,895t → ~3,631t (outputSchema share
+  66% → 17%). `get_panelapp_diagnostics` keeps its output schema (it declares
+  `headline`).
+- Error codes are closed to the fleet six-value enum: `internal_error` → `internal`;
+  an untrusted-text ceiling breach is now `invalid_input` (client-actionable —
+  narrow the request) rather than the non-enum `limit_exceeded`.
 
 ### Fixed
 
+- **Issue #25 D1 (`get_panels_for_genes` / `get_gene_panels`):** the gene roll-up
+  `panel_count` (and `regions`) was computed from the UNFILTERED result set while
+  the `panels` array beside it was filtered, so `get_panels_for_genes(SCN1A,
+  region=uk, min_confidence=green)` reported `panel_count: 13` next to 10 green
+  panels — matching the unfiltered call and inflating gene-triage counts. Count
+  and regions now reflect the filter and agree with the panels array and the
+  sibling `get_gene_panels` count.
+- **Issue #25 D4 (`get_panel`):** a non-positive `panel_id` (e.g. `-1`) was
+  interpolated into `/panels/-1/` and PanelApp answered with an unrelated real
+  panel (COVID-19 research) returned with `success: true` — a negative-index leak.
+  A non-positive `panel_id` is now rejected with `invalid_input` on every path
+  (`get_panel`, `get_panel_genes`, `compare_panels` refs, and the `PanelRef`
+  schema `ge=1`).
+- **Issue #25 D3 (`resolve_gene` / `get_gene_panels`):** an HGNC CURIE in the
+  lookup position was passed to `/genes/?entity_name=`, where it missed on UK but
+  loosely matched on AU — succeeding with a silently dropped region. An HGNC CURIE
+  as the lookup key is now rejected with `invalid_input` naming `gene_symbol`.
+  `get_gene_panels`'s `hgnc_id` result FILTER is validated too: a malformed value
+  is `invalid_input` and a well-formed value that matches no entity is `not_found`,
+  never a silent zero-row success.
+- **Issue #25 D5 (`isError`):** error envelopes were returned as plain dicts, which
+  FastMCP wraps with `isError: false`, so a client branching on MCP `isError` saw a
+  successful call. Every error envelope now carries `isError: true` (via a single
+  `ToolResult(is_error=True)` chokepoint) while keeping the structured envelope.
+- `search_panels` / `get_panel_genes` now emit a boolean `has_more` so a partial
+  page declares that more results exist (the rich `truncated` block is a dict, not
+  the boolean flag a paging client checks).
 - `get_panel` and `get_panel_genes` advertised `region` as
   `"uk" | "australia" | "both"` while the service rejects `"both"` (panel ids are
   per-region). A client that read the input schema, saw `both` was a legal enum

@@ -9,11 +9,6 @@ from pydantic import Field
 from panelapp_link.mcp.annotations import READ_ONLY_OPEN_WORLD
 from panelapp_link.mcp.envelope import McpErrorContext, run_mcp_tool
 from panelapp_link.mcp.next_commands import after_get_panel, after_search_panels, cmd
-from panelapp_link.mcp.schemas import (
-    GET_PANEL_GENES_SCHEMA,
-    GET_PANEL_SCHEMA,
-    SEARCH_PANELS_SCHEMA,
-)
 from panelapp_link.mcp.service_adapters import get_panelapp_service
 from panelapp_link.models.enums import (
     ConfidenceLabel,
@@ -35,10 +30,54 @@ _REGION = Annotated[
     Field(description="uk (Genomics England) | australia | both (default)."),
 ]
 # Panel ids are per-region, so the advertised enum is ("uk", "australia") -- 'both'
-# is rejected by the schema, not after a round trip through the service.
+# is rejected by the schema, not after a round trip through the service. Required, so
+# it carries an example (Tool-Schema Documentation Standard S2).
 _REGION_CONCRETE = Annotated[
     RegionConcrete,
-    Field(description="uk (Genomics England) | australia. Panel ids are per-region; not 'both'."),
+    Field(
+        description="uk (Genomics England) | australia. Panel ids are per-region; not 'both'.",
+        examples=["uk"],
+    ),
+]
+# Required positive panel id; the example lets the behaviour gate build a valid call.
+_PANEL_ID = Annotated[
+    int,
+    Field(
+        ge=1,
+        description="PanelApp panel id (region-scoped, positive integer, e.g. 285).",
+        examples=[285],
+    ),
+]
+_QUERY = Annotated[
+    str,
+    Field(
+        description=(
+            "Free-text search over panel name, relevant disorders, and disease "
+            "group (word-prefix match; empty returns all)."
+        ),
+    ),
+]
+_LIMIT = Annotated[int, Field(ge=1, le=500, description="Max results per page (1-500).")]
+_OFFSET = Annotated[
+    int,
+    Field(ge=0, description="0-based offset into the result set; prefer truncated.next_cursor."),
+]
+_CURSOR = Annotated[
+    str | None,
+    Field(
+        description=(
+            "Opaque page token from a prior truncated.next_cursor; pass it to "
+            "continue paging (rejected as invalid_input only if malformed)."
+        ),
+    ),
+]
+_ENTITY_TYPE = Annotated[
+    EntityType,
+    Field(description="gene (default) | region | str | all.", examples=["gene"]),
+]
+_MIN_CONFIDENCE = Annotated[
+    ConfidenceLabel | None,
+    Field(description="green | amber | red rank floor; default no filter."),
 ]
 
 
@@ -49,7 +88,7 @@ def register_panel_tools(mcp: FastMCP) -> None:
         name="search_panels",
         title="Search PanelApp Panels",
         annotations=READ_ONLY_OPEN_WORLD,
-        output_schema=SEARCH_PANELS_SCHEMA,
+        output_schema=None,
         tags={"panel", "search"},
         description=(
             "Search PanelApp panels by name, relevant disorders, or disease group "
@@ -58,12 +97,12 @@ def register_panel_tools(mcp: FastMCP) -> None:
         ),
     )
     async def search_panels(
-        query: str = "",
+        query: _QUERY = "",
         region: _REGION = "both",
         response_mode: _MODE = "compact",
-        limit: int = 20,
-        offset: int = 0,
-        cursor: str | None = None,
+        limit: _LIMIT = 20,
+        offset: _OFFSET = 0,
+        cursor: _CURSOR = None,
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
             payload = await get_panelapp_service().search_panels(
@@ -78,8 +117,13 @@ def register_panel_tools(mcp: FastMCP) -> None:
             trunc = payload.get("truncated") or {}
             if trunc.get("next_cursor"):
                 # Page-forward first so an agent sweeping next_commands[0] walks
-                # the full result set.
-                nexts.append(cmd("search_panels", region=region, cursor=trunc["next_cursor"]))
+                # the full result set. The cursor is offset-only, so the page-forward
+                # MUST carry every result-set-defining arg (query, region) or the next
+                # page filters a different set at that offset (unrelated panels, a
+                # different total).
+                nexts.append(
+                    cmd("search_panels", query=query, region=region, cursor=trunc["next_cursor"])
+                )
             nexts.extend(after_search_panels(payload.get("panels", [])))
             payload["_meta"] = {"next_commands": nexts[:5]}
             return payload
@@ -95,7 +139,7 @@ def register_panel_tools(mcp: FastMCP) -> None:
         name="get_panel",
         title="Get PanelApp Panel",
         annotations=READ_ONLY_OPEN_WORLD,
-        output_schema=GET_PANEL_SCHEMA,
+        output_schema=None,
         tags={"panel"},
         description=(
             "Return one panel's detail plus its entity-count breakdown. region must "
@@ -103,7 +147,7 @@ def register_panel_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_panel(
-        panel_id: int,
+        panel_id: _PANEL_ID,
         region: _REGION_CONCRETE,
         response_mode: _MODE = "compact",
     ) -> dict[str, Any]:
@@ -127,7 +171,7 @@ def register_panel_tools(mcp: FastMCP) -> None:
         name="get_panel_genes",
         title="Get PanelApp Panel Entities",
         annotations=READ_ONLY_OPEN_WORLD,
-        output_schema=GET_PANEL_GENES_SCHEMA,
+        output_schema=None,
         tags={"panel", "gene"},
         description=(
             "Return a panel's entities (genes by default; or region | str | all), "
@@ -137,20 +181,14 @@ def register_panel_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_panel_genes(
-        panel_id: int,
+        panel_id: _PANEL_ID,
         region: _REGION_CONCRETE,
-        entity_type: Annotated[
-            EntityType,
-            Field(description="gene (default) | region | str | all."),
-        ] = "gene",
-        min_confidence: Annotated[
-            ConfidenceLabel | None,
-            Field(description="green | amber | red rank floor; default no filter."),
-        ] = None,
+        entity_type: _ENTITY_TYPE = "gene",
+        min_confidence: _MIN_CONFIDENCE = None,
         response_mode: _MODE = "compact",
-        limit: int = 100,
-        offset: int = 0,
-        cursor: str | None = None,
+        limit: _LIMIT = 100,
+        offset: _OFFSET = 0,
+        cursor: _CURSOR = None,
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
             payload = await get_panelapp_service().get_panel_genes(
@@ -166,15 +204,19 @@ def register_panel_tools(mcp: FastMCP) -> None:
             nexts: list[dict[str, Any]] = []
             trunc = payload.get("truncated") or {}
             if trunc.get("next_cursor"):
-                nexts.append(
-                    cmd(
-                        "get_panel_genes",
-                        panel_id=panel_id,
-                        region=region,
-                        entity_type=entity_type,
-                        cursor=trunc["next_cursor"],
-                    )
-                )
+                # The cursor is offset-only, so the page-forward MUST carry every
+                # result-set-defining arg (entity_type AND min_confidence) or the next
+                # page returns a different set at that offset -- e.g. amber+red genes at
+                # an offset computed for a green-only page, with a different total.
+                page_args: dict[str, Any] = {
+                    "panel_id": panel_id,
+                    "region": region,
+                    "entity_type": entity_type,
+                    "cursor": trunc["next_cursor"],
+                }
+                if min_confidence is not None:
+                    page_args["min_confidence"] = min_confidence
+                nexts.append(cmd("get_panel_genes", **page_args))
             payload["_meta"] = {"next_commands": nexts[:5]}
             return payload
 

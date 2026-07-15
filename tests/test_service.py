@@ -176,11 +176,13 @@ async def test_get_gene_panels_hgnc_filter(live_service: PanelAppService) -> Non
         gene_symbol="PKD1", hgnc_id="HGNC:9008", region="australia"
     )
     assert out["count"] >= 1
-    # A non-matching hgnc filter removes every hit.
-    out2 = await live_service.get_gene_panels(
-        gene_symbol="PKD1", hgnc_id="HGNC:0000", region="australia"
-    )
-    assert out2["count"] == 0
+    # A well-formed hgnc_id matching no entity fails loudly (#25 D5): the previous
+    # behaviour returned count 0 with success -- a silent-empty filter, forbidden by
+    # Response-Envelope v1.1 -- and this test used to ratify it.
+    with pytest.raises(NotFoundError):
+        await live_service.get_gene_panels(
+            gene_symbol="PKD1", hgnc_id="HGNC:0000", region="australia"
+        )
 
 
 async def test_get_gene_panels_min_confidence_filter(live_service: PanelAppService) -> None:
@@ -327,19 +329,19 @@ async def test_get_panel_genes_malformed_cursor_raises(live_service: PanelAppSer
 
 
 def test_cursor_negative_offset_rejected() -> None:
-    from panelapp_link.services.panelapp_service import _decode_cursor, _encode_cursor
+    from panelapp_link.services._live_helpers import decode_cursor, encode_cursor
 
-    bad = _encode_cursor(-5)
+    bad = encode_cursor(-5)
     with pytest.raises(InvalidInputError) as exc:
-        _decode_cursor(bad)
+        decode_cursor(bad)
     assert exc.value.field == "cursor"
 
 
 def test_cursor_roundtrip_unpadded() -> None:
-    from panelapp_link.services.panelapp_service import _decode_cursor, _encode_cursor
+    from panelapp_link.services._live_helpers import decode_cursor, encode_cursor
 
     for offset in (0, 1, 7, 123, 4096):
-        assert _decode_cursor(_encode_cursor(offset)) == offset
+        assert decode_cursor(encode_cursor(offset)) == offset
 
 
 # --- B-2: word-boundary search filtering + relevance ranking ---------------

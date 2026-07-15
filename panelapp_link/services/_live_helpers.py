@@ -7,10 +7,86 @@ small transforms independently testable.
 
 from __future__ import annotations
 
+import base64
+import json
 import re
 from typing import Any
 
 from panelapp_link.constants import CONFIDENCE_RANK, confidence_label
+from panelapp_link.exceptions import InvalidInputError
+
+# An HGNC CURIE (``HGNC:1100``) in the gene-lookup position. PanelApp is keyed by
+# gene SYMBOL only (``/genes/?entity_name=``); there is no server-side HGNC lookup
+# (an unknown ``?hgnc_id=`` filter is ignored and returns the whole gene list). A
+# CURIE therefore either misses (UK exact match) or LOOSELY matches one region (AU),
+# so as the lookup key it half-answers with a silently dropped region (issue #25 D3).
+_HGNC_CURIE_RE = re.compile(r"^HGNC:\d+$", re.IGNORECASE)
+
+
+def is_hgnc_curie(value: str) -> bool:
+    """True if ``value`` is structurally an HGNC CURIE (e.g. HGNC:1100)."""
+    return bool(_HGNC_CURIE_RE.match(value))
+
+
+def reject_hgnc_curie(symbol: str, *, field: str) -> None:
+    """Reject an HGNC CURIE used as the gene-lookup key (issue #25 D3).
+
+    PanelApp resolves genes by SYMBOL; a CURIE in the lookup position is not a key
+    here. ``field`` MUST name the caller's actual lookup parameter (``query`` for
+    resolve_gene, ``gene_symbol`` for get_gene_panels) so ``field_errors`` never
+    reports a parameter the calling tool does not expose. ``get_gene_panels``'s
+    ``hgnc_id`` is a separate optional result FILTER and is unaffected.
+    """
+    if is_hgnc_curie(symbol):
+        raise InvalidInputError(
+            "An HGNC id is not a gene-lookup key here; PanelApp is queried by an "
+            "approved gene symbol (e.g. SCN1A).",
+            field=field,
+        )
+
+
+def validate_panel_id(panel_id: int) -> int:
+    """Reject a non-positive panel id before it is interpolated into a URL (#25 D4).
+
+    ``/panels/-1/`` is not a valid resource; without this guard a negative id leaked
+    an unrelated real panel (``get_panel(-1)`` returned the COVID-19 panel). Mirrors
+    the ``limit >= 1`` / ``offset >= 0`` boundary guards.
+    """
+    if panel_id < 1:
+        raise InvalidInputError("panel_id must be >= 1.", field="panel_id")
+    return panel_id
+
+
+def min_rank(min_confidence: str | None) -> int | None:
+    """Map a min_confidence label to a numeric rank floor, validating it."""
+    if min_confidence is None:
+        return None
+    rank = CONFIDENCE_RANK.get(min_confidence)
+    if rank is None:
+        raise InvalidInputError(
+            f"Invalid min_confidence. Use one of: {', '.join(CONFIDENCE_RANK)}.",
+            field="min_confidence",
+        )
+    return rank
+
+
+def encode_cursor(offset: int) -> str:
+    """Encode an opaque, url-safe ``{"offset": N}`` cursor (no padding)."""
+    raw = json.dumps({"offset": offset}, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def decode_cursor(cursor: str) -> int:
+    """Decode a cursor token to its offset; raise ``InvalidInputError`` on garbage."""
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+        offset = int(payload["offset"])
+    except Exception as exc:  # malformed base64 / json / missing key
+        raise InvalidInputError("cursor is malformed.", field="cursor") from exc
+    if offset < 0:
+        raise InvalidInputError("cursor offset is invalid.", field="cursor")
+    return offset
 
 
 def as_str(value: Any) -> str | None:
@@ -111,7 +187,17 @@ def gene_identity(
     results: list[tuple[str, dict[str, Any]]],
     hits: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Roll a gene identity (symbol, hgnc id, panel count, regions, max label) up."""
+    """Roll a gene identity (symbol, hgnc id, panel count, regions, max label) up.
+
+    ``symbol``/``hgnc_id`` are gene METADATA and come from ``results`` (every raw
+    hit carries the same identity, filtered out or not). But ``panel_count``,
+    ``regions``, and ``max_confidence_label`` are properties of the RETURNED set,
+    so they are derived from ``hits`` -- the post-filter rows the caller already
+    shaped into ``panels``. Keying them off ``results`` was issue #25 D1: a
+    ``min_confidence=green`` call reported ``panel_count`` from the unfiltered
+    ``len(results)`` (e.g. 13) beside a 10-element green ``panels`` array, so the
+    count contradicted the array and matched the unfiltered call.
+    """
     gene_symbol = symbol.upper()
     hgnc_id: str | None = None
     for _region_key, result in results:
@@ -121,7 +207,7 @@ def gene_identity(
         if hgnc_id is None and gene_data.get("hgnc_id"):
             hgnc_id = gene_data["hgnc_id"]
 
-    regions = sorted({region_key for region_key, _ in results})
+    regions = sorted({str(hit.get("region")) for hit in hits if hit.get("region")})
     max_rank = 0
     max_label: str | None = None
     for hit in hits:
@@ -132,7 +218,7 @@ def gene_identity(
     return {
         "gene_symbol": gene_symbol,
         "hgnc_id": hgnc_id,
-        "panel_count": len(results),
+        "panel_count": len(hits),
         "regions": regions,
         "max_confidence_label": max_label,
     }

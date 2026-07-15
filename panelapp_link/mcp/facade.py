@@ -24,6 +24,9 @@ def create_panelapp_mcp() -> FastMCP:
         version=__version__,
         instructions=PANELAPP_SERVER_INSTRUCTIONS,
         mask_error_details=True,
+        # Keep $defs by reference instead of inlining them (Tool-Surface Budget v1):
+        # compact and safe -- none of our INPUT schemas rely on dereferenced $refs.
+        dereference_schemas=False,
     )
     # Scrub FastMCP-core / MCP-SDK log records that reflect the caller's OWN requested
     # tool name / resource URI / prompt name (unknown-tool "Handler called" DEBUG lines,

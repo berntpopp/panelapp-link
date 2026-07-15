@@ -70,11 +70,16 @@ def _validate_refs(panel_refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 field="region",
             )
         # NOT dead code: unreachable from MCP (the tool's PanelRef coerces panel_id to
-        # int before this runs -- deliberately, so an LLM caller sending "1207" wins),
-        # but this is a public Python API and a non-MCP caller can still pass anything.
-        # Same rationale as the 'both' guards above: defence in depth, not duplication.
-        if not isinstance(panel_id, int):
+        # int and enforces ge=1 before this runs -- deliberately, so an LLM caller
+        # sending "1207" wins), but this is a public Python API and a non-MCP caller can
+        # still pass anything. Same rationale as the 'both' guards above: defence in
+        # depth, not duplication.
+        if not isinstance(panel_id, int) or isinstance(panel_id, bool):
             raise InvalidInputError("panel_id must be an integer.", field="panel_id")
+        if panel_id < 1:
+            # issue #25 D4, one level up: a -1 ref must fail before any fetch, not leak
+            # an unrelated panel via /panels/-1/.
+            raise InvalidInputError("panel_id must be >= 1.", field="panel_id")
         out.append({"panel_id": panel_id, "region": region})
     return out
 

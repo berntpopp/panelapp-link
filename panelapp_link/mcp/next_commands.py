@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from panelapp_link.mcp.untrusted_content import FORBIDDEN_CODEPOINTS
+from panelapp_link.services._live_helpers import is_hgnc_curie
 
 _MAX_NEXT_COMMANDS = 5
 
@@ -114,11 +115,20 @@ def recovery_commands(
     recover from a failure instead of parsing the prose ``recovery_action``.
     Always capped at ``_MAX_NEXT_COMMANDS``.
     """
-    gene_in = arguments.get("hgnc_id") or arguments.get("gene_symbol") or arguments.get("query")
+    # Prefer the SYMBOL keys over hgnc_id: a recovery breadcrumb feeds gene_in into a
+    # symbol-query tool (resolve_gene / search_panels), and an HGNC CURIE is not a
+    # lookup key there. Reaching for hgnc_id first built resolve_gene(query="HGNC:...")
+    # on a get_gene_panels hgnc-mismatch not_found -- which the CURIE rejection now fails
+    # with invalid_input, steering the model into a deterministic 2nd error.
+    gene_in = arguments.get("gene_symbol") or arguments.get("query") or arguments.get("hgnc_id")
     # A recovery next_command is a ready-to-CALL suggestion; never seed one from a
     # caller identifier carrying the fence's forbidden code points -- omit it (an
     # invalid value is dropped, not sanitized+echoed, for a recovery argument).
     if isinstance(gene_in, str) and any(ord(c) in FORBIDDEN_CODEPOINTS for c in gene_in):
+        gene_in = None
+    # Never seed a symbol-query breadcrumb from an HGNC CURIE: it would fail the same
+    # invalid_input, so drop it and offer no (broken) recovery instead.
+    if isinstance(gene_in, str) and is_hgnc_curie(gene_in):
         gene_in = None
     nexts: list[dict[str, Any]] = []
     if error_code == "not_found":

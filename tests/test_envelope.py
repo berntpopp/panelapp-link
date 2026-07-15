@@ -72,7 +72,7 @@ class TestErrorClassification:
             (NotFoundError("nope"), "not_found", False, "switch_tool"),
             (RateLimitError("limit"), "rate_limited", True, "retry_backoff"),
             (DownloadError("net"), "upstream_unavailable", True, "retry_backoff"),
-            (RuntimeError("boom"), "internal_error", False, "retry_backoff"),
+            (RuntimeError("boom"), "internal", False, "retry_backoff"),
         ],
     )
     async def test_codes(self, exc: Exception, code: str, retryable: bool, recovery: str) -> None:
@@ -117,11 +117,15 @@ class TestErrorClassification:
 
 
 class TestMcpToolError:
-    async def test_passes_custom_error_code(self) -> None:
-        out = await run_mcp_tool(
-            "t", _raiser(McpToolError(error_code="custom_code", message="msg"))
-        )
-        assert out["error_code"] == "custom_code"
+    def test_rejects_a_code_outside_the_closed_enum(self) -> None:
+        # error_code is closed to the six-value enum: an out-of-enum code must never
+        # reach the wire, so constructing one fails fast.
+        with pytest.raises(ValueError, match="closed enum"):
+            McpToolError(error_code="custom_code", message="msg")  # type: ignore[arg-type]
+
+    async def test_passes_an_enum_error_code(self) -> None:
+        out = await run_mcp_tool("t", _raiser(McpToolError(error_code="not_found", message="msg")))
+        assert out["error_code"] == "not_found"
         assert out["message"] == "msg"
         assert out["retryable"] is False
 

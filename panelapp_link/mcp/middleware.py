@@ -59,6 +59,42 @@ from panelapp_link.mcp.envelope import (
 
 logger = logging.getLogger(__name__)
 
+
+def _error_tool_result(envelope: dict[str, Any]) -> ToolResult:
+    """Wrap a structured error envelope as a ToolResult with MCP ``isError: true``.
+
+    Response-Envelope v1: "isError: true is REQUIRED so clients surface the error to
+    the model for self-correction." A returned dict never sets it, so every error
+    envelope this middleware emits (and every domain error envelope the tool body
+    returns) is routed through this.
+    """
+    return ToolResult(structured_content=envelope, is_error=True)
+
+
+def _flag_domain_error(result: ToolResult) -> ToolResult:
+    """Re-flag a tool-body error envelope with ``isError: true``.
+
+    A tool body returns a plain error-envelope dict (``success: False``,
+    ``error_code``); FastMCP wraps it as a success ToolResult (isError unset). Detect
+    that envelope on the way out and re-emit it with isError set, preserving content
+    and meta. This is the single chokepoint for EVERY domain error path -- it cannot
+    miss a raise site the way per-site wrapping can.
+    """
+    structured = getattr(result, "structured_content", None)
+    if not isinstance(structured, dict):
+        return result
+    if structured.get("success") is False or structured.get("error_code"):
+        if getattr(result, "is_error", False):
+            return result
+        return ToolResult(
+            content=result.content,
+            structured_content=structured,
+            meta=getattr(result, "meta", None),
+            is_error=True,
+        )
+    return result
+
+
 #: Fixed, name/URI-free frames for reflection surfaces that bypass the tool envelope.
 _UNKNOWN_TOOL_MESSAGE = "Unknown tool."
 _UNKNOWN_RESOURCE_MESSAGE = "The requested resource was not found."
@@ -87,13 +123,13 @@ class InputValidationMiddleware(Middleware):
                 tool_obj = None
             if tool_obj is None:
                 logger.warning("mcp_unknown_tool")
-                return ToolResult(structured_content=unknown_tool_envelope())
+                return _error_tool_result(unknown_tool_envelope())
         try:
-            return await call_next(context)
+            result = await call_next(context)
         except FastMCPNotFoundError:
             # Backstop for the raise path when no fastmcp context was available.
             logger.warning("mcp_unknown_tool")
-            return ToolResult(structured_content=unknown_tool_envelope())
+            return _error_tool_result(unknown_tool_envelope())
         except (FastMCPValidationError, PydanticValidationError) as exc:
             tool_name = context.message.name
             arguments = dict(context.message.arguments or {})
@@ -104,7 +140,10 @@ class InputValidationMiddleware(Middleware):
                 )
             else:
                 envelope = arg_validation_failure_envelope(tool_name=tool_name, arguments=arguments)
-            return ToolResult(structured_content=envelope)
+            return _error_tool_result(envelope)
+        # A domain error envelope returned by the tool body arrives here as a
+        # success-wrapped ToolResult; re-flag it with isError:true.
+        return _flag_domain_error(result)
 
     async def on_read_resource(
         self,

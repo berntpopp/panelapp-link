@@ -240,9 +240,17 @@ async def test_no_surface_claims_an_hgnc_id_can_be_resolved() -> None:
 
 
 async def test_resolve_gene_really_cannot_resolve_an_hgnc_id(live_service: Any) -> None:
-    """The behaviour behind the claim: an HGNC CURIE is a literal entity_name -> miss."""
+    """The behaviour behind the claim: an HGNC CURIE is not a lookup key (issue #25 D3).
+
+    It is rejected up front with ``invalid_input`` (field ``gene_symbol``) rather
+    than passed to ``/genes/?entity_name=HGNC:1100``, where it would miss on UK but
+    loosely match on AU -- a half-answer with a silently dropped region.
+    """
     body = await _call("resolve_gene", {"query": "HGNC:1100"}, live_service)
-    assert body["error_code"] == "not_found"
+    assert body["error_code"] == "invalid_input"
+    # The field names resolve_gene's ACTUAL parameter (query), never a param the tool
+    # does not expose.
+    assert body["field_errors"][0]["field"] == "query"
 
 
 # --- 4. resolve_gene returns exactly one gene; it is not a disambiguator ---------

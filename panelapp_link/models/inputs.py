@@ -37,5 +37,11 @@ class PanelRef(BaseModel):
     # do emit stringified integers.
     model_config = ConfigDict(extra="ignore")
 
-    panel_id: int = Field(description="PanelApp panel id (region-scoped).")
-    region: RegionConcrete = Field(description="uk (Genomics England) | australia.")
+    panel_id: int = Field(
+        ge=1,
+        description="PanelApp panel id (region-scoped, positive integer, e.g. 285).",
+        examples=[285],
+    )
+    region: RegionConcrete = Field(
+        description="uk (Genomics England) | australia.", examples=["uk"]
+    )

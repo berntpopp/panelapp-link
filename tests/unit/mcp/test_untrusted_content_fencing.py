@@ -181,15 +181,15 @@ async def test_get_panel_genes_via_mcp_fences_phenotypes_and_evidence(hostile_mc
 
 
 async def test_untrusted_limit_error_maps_to_typed_envelope_code() -> None:
-    """A limit breach surfaces as an explicit typed code, never internal_error."""
+    """A limit breach is client-actionable -> invalid_input, never an opaque internal."""
 
     async def call() -> dict[str, Any]:
         raise UntrustedTextLimitError("untrusted object count 200 exceeds ceiling 128")
 
     out = await run_mcp_tool("get_panel_genes", call, context=McpErrorContext("get_panel_genes"))
     assert out["success"] is False
-    assert out["error_code"] == "limit_exceeded"
-    assert out["error_code"] != "internal_error"
+    assert out["error_code"] == "invalid_input"
+    assert out["error_code"] != "internal"
     assert out["retryable"] is False
 
 

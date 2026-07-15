@@ -21,14 +21,11 @@ opaque base64(JSON ``{"offset": N}``) token, mirroring the fleet contract.
 from __future__ import annotations
 
 import asyncio
-import base64
 import contextlib
-import json
 import logging
 from typing import TYPE_CHECKING, Any
 
 from panelapp_link.config import get_data_config
-from panelapp_link.constants import CONFIDENCE_RANK
 from panelapp_link.exceptions import (
     DownloadError,
     InvalidInputError,
@@ -64,25 +61,6 @@ _REGION_MAP: dict[str, list[str]] = {
 _TRUNCATION_HINT = (
     "More results available; re-call with next_offset, or follow next_cursor for paging."
 )
-
-
-def _encode_cursor(offset: int) -> str:
-    """Encode an opaque, url-safe ``{"offset": N}`` cursor (no padding)."""
-    raw = json.dumps({"offset": offset}, separators=(",", ":")).encode("utf-8")
-    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
-
-
-def _decode_cursor(cursor: str) -> int:
-    """Decode a cursor token to its offset; raise ``InvalidInputError`` on garbage."""
-    try:
-        padded = cursor + "=" * (-len(cursor) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
-        offset = int(payload["offset"])
-    except Exception as exc:  # malformed base64 / json / missing key
-        raise InvalidInputError("cursor is malformed.", field="cursor") from exc
-    if offset < 0:
-        raise InvalidInputError("cursor offset is invalid.", field="cursor")
-    return offset
 
 
 class PanelAppService:
@@ -143,19 +121,6 @@ class PanelAppService:
         return entity_type
 
     @staticmethod
-    def _min_rank(min_confidence: str | None) -> int | None:
-        """Map a min_confidence label to a numeric rank floor, validating it."""
-        if min_confidence is None:
-            return None
-        rank = CONFIDENCE_RANK.get(min_confidence)
-        if rank is None:
-            raise InvalidInputError(
-                f"Invalid min_confidence. Use one of: {', '.join(CONFIDENCE_RANK)}.",
-                field="min_confidence",
-            )
-        return rank
-
-    @staticmethod
     def _clamp_limit(limit: int) -> int:
         if limit < 1:
             raise InvalidInputError("limit must be >= 1.", field="limit")
@@ -177,7 +142,7 @@ class PanelAppService:
             "total": total,
             "returned": returned,
             "next_offset": next_offset,
-            "next_cursor": _encode_cursor(next_offset),
+            "next_cursor": helpers.encode_cursor(next_offset),
             "hint": _TRUNCATION_HINT,
         }
 
@@ -263,7 +228,7 @@ class PanelAppService:
         over the deduped set.
         """
         if cursor is not None:
-            offset = _decode_cursor(cursor)
+            offset = helpers.decode_cursor(cursor)
         mode = self._validate_mode(response_mode)
         regions = self._normalize_region(region)
         limit = self._clamp_limit(limit)
@@ -302,6 +267,10 @@ class PanelAppService:
         # Panels fence description + each type description; list-tool ceiling.
         enforce_untrusted_text_limits(fenced, max_objects=_LIST_TOOL_MAX_FENCED_OBJECTS)
         trunc = self._truncation(total, limit, offset, len(page))
+        # has_more is the boolean partial-page flag (truncated is the rich block);
+        # a partial page MUST declare it so a client never reads the page as the whole
+        # result set (Response-Envelope pagination honesty).
+        payload["has_more"] = trunc is not None
         if trunc:
             payload["truncated"] = trunc
         return payload
@@ -326,6 +295,7 @@ class PanelAppService:
                 "per-region; 'both' is not allowed).",
                 field="region",
             )
+        helpers.validate_panel_id(panel_id)
         region_key = self._normalize_region(region)[0]
         detail = await self._panel_detail(region_key, panel_id)
         signed = await self._signed_off_map(region_key)
@@ -353,16 +323,17 @@ class PanelAppService:
         "entities":[...],"truncated"?}``.
         """
         if cursor is not None:
-            offset = _decode_cursor(cursor)
+            offset = helpers.decode_cursor(cursor)
         mode = self._validate_mode(response_mode)
         if region == "both":
             raise InvalidInputError(
                 "region must be 'uk' or 'australia' for get_panel_genes.",
                 field="region",
             )
+        helpers.validate_panel_id(panel_id)
         region_key = self._normalize_region(region)[0]
         entity_type = self._validate_entity_type(entity_type)
-        min_rank = self._min_rank(min_confidence)
+        min_rank = helpers.min_rank(min_confidence)
         limit = self._clamp_limit(limit)
         offset = self._validate_offset(offset)
 
@@ -389,6 +360,7 @@ class PanelAppService:
         # Real ceiling: up to _MAX_LIMIT entities/page, each with 2 prose lists.
         enforce_untrusted_text_limits(fenced, max_objects=_LIST_TOOL_MAX_FENCED_OBJECTS)
         trunc = self._truncation(total, limit, offset, len(page))
+        payload["has_more"] = trunc is not None
         if trunc:
             payload["truncated"] = trunc
         return payload
@@ -413,7 +385,7 @@ class PanelAppService:
         """
         self._validate_mode(response_mode)
         regions = self._normalize_region(region)
-        min_rank = self._min_rank(min_confidence)
+        min_rank = helpers.min_rank(min_confidence)
         symbol = (gene_symbol or "").strip()
         if not symbol:
             raise InvalidInputError(
@@ -421,12 +393,34 @@ class PanelAppService:
                 "hgnc_id alone cannot drive the query.",
                 field="gene_symbol",
             )
+        helpers.reject_hgnc_curie(symbol, field="gene_symbol")
         hid = (hgnc_id or "").strip() or None
+        if hid is not None:
+            if not helpers.is_hgnc_curie(hid):
+                raise InvalidInputError(
+                    "hgnc_id must be an HGNC CURIE like HGNC:1100.", field="hgnc_id"
+                )
+            # Canonicalise case so the match below is case-insensitive: validation
+            # accepts hgnc:13666 but PanelApp stores HGNC:13666, and a case-sensitive
+            # compare would otherwise 404 a well-formed id (a CURIE is HGNC:<digits>,
+            # so upper() only touches the prefix).
+            hid = hid.upper()
 
         results = await self._gather_gene_results(regions, symbol)
         if not results:
             raise NotFoundError(
                 f"No PanelApp gene found for {symbol!r}. Try resolve_gene to confirm a symbol."
+            )
+        # A well-formed hgnc_id that matches no resolved entity is a caller mismatch,
+        # not an empty result: fail loudly instead of silently zeroing the hits (the
+        # silent-empty filter forbidden by Response-Envelope v1.1). min_confidence may
+        # still legitimately empty the hits below -- that filter is over a DECLARED enum.
+        if hid is not None and not any(
+            (result.get("gene_data") or {}).get("hgnc_id") == hid for _rk, result in results
+        ):
+            raise NotFoundError(
+                f"Gene {symbol!r} does not carry hgnc_id {hid} on any PanelApp entity. "
+                "Drop hgnc_id or pass the gene's actual HGNC id."
             )
 
         hits: list[dict[str, Any]] = []
@@ -473,12 +467,17 @@ class PanelAppService:
         lookup. Raises ``NotFoundError`` when nothing matches.
         """
         self._validate_mode(response_mode)
+        # Name the parameter the caller actually supplied so field_errors never points
+        # at a param the calling tool does not expose (the resolve_gene tool takes only
+        # `query`; the service also accepts `gene_symbol`).
+        lookup_field = "gene_symbol" if (gene_symbol or "").strip() else "query"
         symbol = (gene_symbol or "").strip() or (query or "").strip()
         if not symbol:
             raise InvalidInputError(
                 "Provide a gene_symbol or a non-empty query (PanelApp resolves by gene symbol).",
-                field="gene_symbol",
+                field=lookup_field,
             )
+        helpers.reject_hgnc_curie(symbol, field=lookup_field)
         regions = self._normalize_region(region)
         results = await self._gather_gene_results(regions, symbol)
         if not results:

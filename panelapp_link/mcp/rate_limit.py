@@ -71,4 +71,6 @@ class RateLimitMiddleware(Middleware):
         if self._bucket is None or self._bucket.allow():
             return await call_next(context)
         envelope = rate_limited_envelope(context.message.name)
-        return ToolResult(structured_content=envelope)
+        # is_error=True so a client branching on MCP isError sees the rejection
+        # (Response-Envelope v1); a returned dict never sets it.
+        return ToolResult(structured_content=envelope, is_error=True)
