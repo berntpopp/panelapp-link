@@ -25,6 +25,7 @@ import base64
 import contextlib
 import json
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 from panelapp_link.config import get_data_config
@@ -64,6 +65,14 @@ _REGION_MAP: dict[str, list[str]] = {
 _TRUNCATION_HINT = (
     "More results available; re-call with next_offset, or follow next_cursor for paging."
 )
+
+# An HGNC CURIE (``HGNC:1100``) in the gene-lookup position. PanelApp is keyed by
+# gene SYMBOL only (``/genes/?entity_name=``); there is no server-side HGNC lookup
+# (an unknown ``?hgnc_id=`` filter is ignored and returns the whole gene list). A
+# CURIE therefore either misses (UK: exact match) or LOOSELY matches one region
+# (AU), so passing it as the lookup key half-answers with a silently dropped region
+# (issue #25 D3). Reject it up front, naming gene_symbol as the supported key.
+_HGNC_CURIE_RE = re.compile(r"^HGNC:\d+$", re.IGNORECASE)
 
 
 def _encode_cursor(offset: int) -> str:
@@ -154,6 +163,22 @@ class PanelAppService:
                 field="min_confidence",
             )
         return rank
+
+    @staticmethod
+    def _reject_hgnc_curie(symbol: str) -> None:
+        """Reject an HGNC CURIE used as the gene-lookup key (issue #25 D3).
+
+        PanelApp resolves genes by SYMBOL; a CURIE in the ``gene_symbol``/``query``
+        position is not a lookup key here (it either misses or loosely matches a
+        single region and drops the other). ``get_gene_panels``'s ``hgnc_id`` is a
+        separate optional result FILTER and is unaffected.
+        """
+        if _HGNC_CURIE_RE.match(symbol):
+            raise InvalidInputError(
+                "An HGNC id is not a gene-lookup key here; PanelApp is queried by "
+                "approved gene symbol. Pass gene_symbol (e.g. SCN1A).",
+                field="gene_symbol",
+            )
 
     @staticmethod
     def _validate_panel_id(panel_id: int) -> int:
@@ -436,6 +461,7 @@ class PanelAppService:
                 "hgnc_id alone cannot drive the query.",
                 field="gene_symbol",
             )
+        self._reject_hgnc_curie(symbol)
         hid = (hgnc_id or "").strip() or None
 
         results = await self._gather_gene_results(regions, symbol)
@@ -494,6 +520,7 @@ class PanelAppService:
                 "Provide a gene_symbol or a non-empty query (PanelApp resolves by gene symbol).",
                 field="gene_symbol",
             )
+        self._reject_hgnc_curie(symbol)
         regions = self._normalize_region(region)
         results = await self._gather_gene_results(regions, symbol)
         if not results:
