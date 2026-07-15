@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from panelapp_link.exceptions import InvalidInputError
+from panelapp_link.exceptions import InvalidInputError, NotFoundError
 
 
 @pytest.mark.parametrize("curie", ["HGNC:10585", "hgnc:20", "HGNC:1100", "HGNC:9008"])
@@ -33,7 +33,19 @@ async def test_get_gene_panels_rejects_hgnc_curie_as_symbol(live_service, curie:
 
 
 async def test_hgnc_id_filter_still_accepted_alongside_a_real_symbol(live_service) -> None:
-    """The hgnc_id FILTER (a legit CURIE) must still work when a real symbol drives it."""
-    # No InvalidInputError: hgnc_id here is the optional result filter, not the key.
+    """The hgnc_id FILTER (a matching CURIE) must still work when a real symbol drives it."""
+    # No error: hgnc_id here is the optional result filter, and it matches AAAS.
     out = await live_service.get_gene_panels(gene_symbol="AAAS", hgnc_id="HGNC:13666")
-    assert isinstance(out, dict) and "count" in out
+    assert isinstance(out, dict) and out["count"] >= 1
+
+
+async def test_hgnc_id_that_matches_nothing_is_not_found_not_silent_empty(live_service) -> None:
+    """#25 D5 silent-empty: a well-formed hgnc_id matching no entity must fail loudly."""
+    with pytest.raises(NotFoundError):
+        await live_service.get_gene_panels(gene_symbol="AAAS", hgnc_id="HGNC:999999")
+
+
+async def test_malformed_hgnc_id_filter_is_invalid_input(live_service) -> None:
+    with pytest.raises(InvalidInputError) as exc:
+        await live_service.get_gene_panels(gene_symbol="AAAS", hgnc_id="not-a-curie")
+    assert exc.value.field == "hgnc_id"

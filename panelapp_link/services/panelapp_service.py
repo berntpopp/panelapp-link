@@ -340,6 +340,10 @@ class PanelAppService:
         # Panels fence description + each type description; list-tool ceiling.
         enforce_untrusted_text_limits(fenced, max_objects=_LIST_TOOL_MAX_FENCED_OBJECTS)
         trunc = self._truncation(total, limit, offset, len(page))
+        # has_more is the boolean partial-page flag (truncated is the rich block);
+        # a partial page MUST declare it so a client never reads the page as the whole
+        # result set (Response-Envelope pagination honesty).
+        payload["has_more"] = trunc is not None
         if trunc:
             payload["truncated"] = trunc
         return payload
@@ -429,6 +433,7 @@ class PanelAppService:
         # Real ceiling: up to _MAX_LIMIT entities/page, each with 2 prose lists.
         enforce_untrusted_text_limits(fenced, max_objects=_LIST_TOOL_MAX_FENCED_OBJECTS)
         trunc = self._truncation(total, limit, offset, len(page))
+        payload["has_more"] = trunc is not None
         if trunc:
             payload["truncated"] = trunc
         return payload
@@ -463,11 +468,26 @@ class PanelAppService:
             )
         self._reject_hgnc_curie(symbol)
         hid = (hgnc_id or "").strip() or None
+        if hid is not None and not _HGNC_CURIE_RE.match(hid):
+            raise InvalidInputError(
+                "hgnc_id must be an HGNC CURIE like HGNC:1100.", field="hgnc_id"
+            )
 
         results = await self._gather_gene_results(regions, symbol)
         if not results:
             raise NotFoundError(
                 f"No PanelApp gene found for {symbol!r}. Try resolve_gene to confirm a symbol."
+            )
+        # A well-formed hgnc_id that matches no resolved entity is a caller mismatch,
+        # not an empty result: fail loudly instead of silently zeroing the hits (the
+        # silent-empty filter forbidden by Response-Envelope v1.1). min_confidence may
+        # still legitimately empty the hits below -- that filter is over a DECLARED enum.
+        if hid is not None and not any(
+            (result.get("gene_data") or {}).get("hgnc_id") == hid for _rk, result in results
+        ):
+            raise NotFoundError(
+                f"Gene {symbol!r} does not carry hgnc_id {hid} on any PanelApp entity. "
+                "Drop hgnc_id or pass the gene's actual HGNC id."
             )
 
         hits: list[dict[str, Any]] = []

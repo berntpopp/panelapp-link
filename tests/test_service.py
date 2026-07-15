@@ -176,11 +176,13 @@ async def test_get_gene_panels_hgnc_filter(live_service: PanelAppService) -> Non
         gene_symbol="PKD1", hgnc_id="HGNC:9008", region="australia"
     )
     assert out["count"] >= 1
-    # A non-matching hgnc filter removes every hit.
-    out2 = await live_service.get_gene_panels(
-        gene_symbol="PKD1", hgnc_id="HGNC:0000", region="australia"
-    )
-    assert out2["count"] == 0
+    # A well-formed hgnc_id matching no entity fails loudly (#25 D5): the previous
+    # behaviour returned count 0 with success -- a silent-empty filter, forbidden by
+    # Response-Envelope v1.1 -- and this test used to ratify it.
+    with pytest.raises(NotFoundError):
+        await live_service.get_gene_panels(
+            gene_symbol="PKD1", hgnc_id="HGNC:0000", region="australia"
+        )
 
 
 async def test_get_gene_panels_min_confidence_filter(live_service: PanelAppService) -> None:
