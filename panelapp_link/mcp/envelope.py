@@ -13,7 +13,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any, Literal, cast, get_args
 
 from pydantic import ValidationError as PydanticValidationError
 from pydantic_core import ErrorDetails
@@ -48,6 +48,18 @@ _RECOMMENDED_CITATION = (
     f"Genomics England PanelApp: {RECOMMENDED_CITATION_UK} "
     f"PanelApp Australia: {RECOMMENDED_CITATION_AU}"
 )
+
+# The closed error-code enum (Response-Envelope Standard v1), harmonized with the
+# behaviour gate's ERROR_CODES set. Nothing outside this is ever surfaced.
+ErrorCode = Literal[
+    "invalid_input",
+    "not_found",
+    "ambiguous_query",
+    "upstream_unavailable",
+    "rate_limited",
+    "internal",
+]
+ERROR_CODES: frozenset[str] = frozenset(get_args(ErrorCode))
 
 # Error codes that are inherently retryable when raised via ``McpToolError``.
 _RETRYABLE_CODES = {"rate_limited", "upstream_unavailable"}
@@ -171,10 +183,20 @@ class McpErrorContext:
 
 
 class McpToolError(Exception):
-    """Raised inside a tool body to emit a specific error code/message."""
+    """Raised inside a tool body to emit a specific error code/message.
 
-    def __init__(self, *, error_code: str, message: str) -> None:
+    ``error_code`` is constrained to the closed :data:`ErrorCode` enum -- an
+    unrecognised code must never reach the wire (a client that branches on a code
+    outside the standard cannot recover), so constructing one is a programming
+    error and fails fast.
+    """
+
+    def __init__(self, *, error_code: ErrorCode, message: str) -> None:
         super().__init__(message)
+        if error_code not in ERROR_CODES:
+            raise ValueError(
+                f"error_code {error_code!r} is not in the closed enum {sorted(ERROR_CODES)}"
+            )
         self.error_code = error_code
         self.message = message
 
@@ -218,7 +240,10 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
     forbidden code points by the recursive envelope pass.
     """
     if isinstance(exc, McpToolError):
-        return exc.error_code, exc.message, exc.error_code in _RETRYABLE_CODES
+        # error_code is enum-constrained at construction; coerce defensively in case it
+        # was mutated, so a non-enum code can never reach the wire.
+        code = exc.error_code if exc.error_code in ERROR_CODES else "internal"
+        return code, exc.message, code in _RETRYABLE_CODES
     if isinstance(exc, (DisallowedURLError, ResponseTooLargeError)):
         # A blocked outbound URL/redirect (F-17) is a fixed, opaque, NON-retryable
         # failure: retrying re-issues the identical blocked request. The blocked
