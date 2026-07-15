@@ -94,9 +94,7 @@ async def test_facade_rate_limits_when_configured(live_service: Any) -> None:
         mcp = create_panelapp_mcp()
         async with Client(mcp) as client:
             first = (await client.call_tool("search_panels", {"region": "uk"})).structured_content
-            second = await client.call_tool(
-                "get_server_capabilities", {}, raise_on_error=False
-            )
+            second = await client.call_tool("get_server_capabilities", {}, raise_on_error=False)
         assert first["success"] is True
         assert second.is_error is True  # rate-limit rejection carries isError:true
         assert second.structured_content["success"] is False

@@ -329,19 +329,19 @@ async def test_get_panel_genes_malformed_cursor_raises(live_service: PanelAppSer
 
 
 def test_cursor_negative_offset_rejected() -> None:
-    from panelapp_link.services.panelapp_service import _decode_cursor, _encode_cursor
+    from panelapp_link.services._live_helpers import decode_cursor, encode_cursor
 
-    bad = _encode_cursor(-5)
+    bad = encode_cursor(-5)
     with pytest.raises(InvalidInputError) as exc:
-        _decode_cursor(bad)
+        decode_cursor(bad)
     assert exc.value.field == "cursor"
 
 
 def test_cursor_roundtrip_unpadded() -> None:
-    from panelapp_link.services.panelapp_service import _decode_cursor, _encode_cursor
+    from panelapp_link.services._live_helpers import decode_cursor, encode_cursor
 
     for offset in (0, 1, 7, 123, 4096):
-        assert _decode_cursor(_encode_cursor(offset)) == offset
+        assert decode_cursor(encode_cursor(offset)) == offset
 
 
 # --- B-2: word-boundary search filtering + relevance ranking ---------------

@@ -21,15 +21,11 @@ opaque base64(JSON ``{"offset": N}``) token, mirroring the fleet contract.
 from __future__ import annotations
 
 import asyncio
-import base64
 import contextlib
-import json
 import logging
-import re
 from typing import TYPE_CHECKING, Any
 
 from panelapp_link.config import get_data_config
-from panelapp_link.constants import CONFIDENCE_RANK
 from panelapp_link.exceptions import (
     DownloadError,
     InvalidInputError,
@@ -65,33 +61,6 @@ _REGION_MAP: dict[str, list[str]] = {
 _TRUNCATION_HINT = (
     "More results available; re-call with next_offset, or follow next_cursor for paging."
 )
-
-# An HGNC CURIE (``HGNC:1100``) in the gene-lookup position. PanelApp is keyed by
-# gene SYMBOL only (``/genes/?entity_name=``); there is no server-side HGNC lookup
-# (an unknown ``?hgnc_id=`` filter is ignored and returns the whole gene list). A
-# CURIE therefore either misses (UK: exact match) or LOOSELY matches one region
-# (AU), so passing it as the lookup key half-answers with a silently dropped region
-# (issue #25 D3). Reject it up front, naming gene_symbol as the supported key.
-_HGNC_CURIE_RE = re.compile(r"^HGNC:\d+$", re.IGNORECASE)
-
-
-def _encode_cursor(offset: int) -> str:
-    """Encode an opaque, url-safe ``{"offset": N}`` cursor (no padding)."""
-    raw = json.dumps({"offset": offset}, separators=(",", ":")).encode("utf-8")
-    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
-
-
-def _decode_cursor(cursor: str) -> int:
-    """Decode a cursor token to its offset; raise ``InvalidInputError`` on garbage."""
-    try:
-        padded = cursor + "=" * (-len(cursor) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
-        offset = int(payload["offset"])
-    except Exception as exc:  # malformed base64 / json / missing key
-        raise InvalidInputError("cursor is malformed.", field="cursor") from exc
-    if offset < 0:
-        raise InvalidInputError("cursor offset is invalid.", field="cursor")
-    return offset
 
 
 class PanelAppService:
@@ -152,48 +121,6 @@ class PanelAppService:
         return entity_type
 
     @staticmethod
-    def _min_rank(min_confidence: str | None) -> int | None:
-        """Map a min_confidence label to a numeric rank floor, validating it."""
-        if min_confidence is None:
-            return None
-        rank = CONFIDENCE_RANK.get(min_confidence)
-        if rank is None:
-            raise InvalidInputError(
-                f"Invalid min_confidence. Use one of: {', '.join(CONFIDENCE_RANK)}.",
-                field="min_confidence",
-            )
-        return rank
-
-    @staticmethod
-    def _reject_hgnc_curie(symbol: str) -> None:
-        """Reject an HGNC CURIE used as the gene-lookup key (issue #25 D3).
-
-        PanelApp resolves genes by SYMBOL; a CURIE in the ``gene_symbol``/``query``
-        position is not a lookup key here (it either misses or loosely matches a
-        single region and drops the other). ``get_gene_panels``'s ``hgnc_id`` is a
-        separate optional result FILTER and is unaffected.
-        """
-        if _HGNC_CURIE_RE.match(symbol):
-            raise InvalidInputError(
-                "An HGNC id is not a gene-lookup key here; PanelApp is queried by "
-                "approved gene symbol. Pass gene_symbol (e.g. SCN1A).",
-                field="gene_symbol",
-            )
-
-    @staticmethod
-    def _validate_panel_id(panel_id: int) -> int:
-        """Reject a non-positive panel id before it is interpolated into a URL.
-
-        PanelApp panel ids are positive integers; ``/panels/-1/`` is not a valid
-        resource. Without this guard a negative id leaked an unrelated real panel
-        (issue #25 D4: ``get_panel(-1)`` returned the COVID-19 panel). Mirrors the
-        ``limit >= 1`` / ``offset >= 0`` boundary guards.
-        """
-        if panel_id < 1:
-            raise InvalidInputError("panel_id must be >= 1.", field="panel_id")
-        return panel_id
-
-    @staticmethod
     def _clamp_limit(limit: int) -> int:
         if limit < 1:
             raise InvalidInputError("limit must be >= 1.", field="limit")
@@ -215,7 +142,7 @@ class PanelAppService:
             "total": total,
             "returned": returned,
             "next_offset": next_offset,
-            "next_cursor": _encode_cursor(next_offset),
+            "next_cursor": helpers.encode_cursor(next_offset),
             "hint": _TRUNCATION_HINT,
         }
 
@@ -301,7 +228,7 @@ class PanelAppService:
         over the deduped set.
         """
         if cursor is not None:
-            offset = _decode_cursor(cursor)
+            offset = helpers.decode_cursor(cursor)
         mode = self._validate_mode(response_mode)
         regions = self._normalize_region(region)
         limit = self._clamp_limit(limit)
@@ -368,7 +295,7 @@ class PanelAppService:
                 "per-region; 'both' is not allowed).",
                 field="region",
             )
-        self._validate_panel_id(panel_id)
+        helpers.validate_panel_id(panel_id)
         region_key = self._normalize_region(region)[0]
         detail = await self._panel_detail(region_key, panel_id)
         signed = await self._signed_off_map(region_key)
@@ -396,17 +323,17 @@ class PanelAppService:
         "entities":[...],"truncated"?}``.
         """
         if cursor is not None:
-            offset = _decode_cursor(cursor)
+            offset = helpers.decode_cursor(cursor)
         mode = self._validate_mode(response_mode)
         if region == "both":
             raise InvalidInputError(
                 "region must be 'uk' or 'australia' for get_panel_genes.",
                 field="region",
             )
-        self._validate_panel_id(panel_id)
+        helpers.validate_panel_id(panel_id)
         region_key = self._normalize_region(region)[0]
         entity_type = self._validate_entity_type(entity_type)
-        min_rank = self._min_rank(min_confidence)
+        min_rank = helpers.min_rank(min_confidence)
         limit = self._clamp_limit(limit)
         offset = self._validate_offset(offset)
 
@@ -458,7 +385,7 @@ class PanelAppService:
         """
         self._validate_mode(response_mode)
         regions = self._normalize_region(region)
-        min_rank = self._min_rank(min_confidence)
+        min_rank = helpers.min_rank(min_confidence)
         symbol = (gene_symbol or "").strip()
         if not symbol:
             raise InvalidInputError(
@@ -466,9 +393,9 @@ class PanelAppService:
                 "hgnc_id alone cannot drive the query.",
                 field="gene_symbol",
             )
-        self._reject_hgnc_curie(symbol)
+        helpers.reject_hgnc_curie(symbol)
         hid = (hgnc_id or "").strip() or None
-        if hid is not None and not _HGNC_CURIE_RE.match(hid):
+        if hid is not None and not helpers.is_hgnc_curie(hid):
             raise InvalidInputError(
                 "hgnc_id must be an HGNC CURIE like HGNC:1100.", field="hgnc_id"
             )
@@ -540,7 +467,7 @@ class PanelAppService:
                 "Provide a gene_symbol or a non-empty query (PanelApp resolves by gene symbol).",
                 field="gene_symbol",
             )
-        self._reject_hgnc_curie(symbol)
+        helpers.reject_hgnc_curie(symbol)
         regions = self._normalize_region(region)
         results = await self._gather_gene_results(regions, symbol)
         if not results:

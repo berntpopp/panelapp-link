@@ -82,11 +82,11 @@ async def test_get_gene_panels_count_matches_panel_count_and_array_under_filter(
     service: PanelAppService,
 ) -> None:
     """panel_count == count == len(panels), all filtered to green."""
-    green = await service.get_gene_panels(
-        gene_symbol="MIXED", region="uk", min_confidence="green"
-    )
+    green = await service.get_gene_panels(gene_symbol="MIXED", region="uk", min_confidence="green")
     assert green["count"] == 2, "two green panels pass the filter"
-    assert green["gene"]["panel_count"] == 2, "roll-up count must reflect the filter, not len(results)"
+    assert green["gene"]["panel_count"] == 2, (
+        "roll-up count must reflect the filter, not len(results)"
+    )
     assert len(green["panels"]) == 2
     assert green["gene"]["regions"] == ["uk"]
     assert green["gene"]["max_confidence_label"] == "green"
