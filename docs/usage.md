@@ -62,12 +62,13 @@ upstream data.
 
 ### Gene-first
 
-1. **Resolve the gene.** `resolve_gene(query | gene_symbol)` maps free text or an
-   approved symbol to one rolled-up `GeneSummary`; `matches[]` always holds exactly
-   that one gene, so it is not a disambiguation list. It takes no `hgnc_id`, and
-   there is **no HGNC lookup anywhere in this server**: PanelApp indexes genes by
-   symbol (`GET /genes/?entity_name=SYMBOL`), so an HGNC id is not a usable starting
-   point — resolve the symbol elsewhere (e.g. `hgnc-link`) and pass that.
+1. **Resolve the gene.** `resolve_gene(query)` maps free text or an approved symbol
+   to one rolled-up `GeneSummary`; `matches[]` always holds exactly that one gene, so
+   it is not a disambiguation list. It takes no `hgnc_id`, and there is **no HGNC
+   lookup anywhere in this server**: PanelApp indexes genes by symbol
+   (`GET /genes/?entity_name=SYMBOL`), so an HGNC id is not a usable starting point —
+   an HGNC CURIE in `query` is rejected with `invalid_input`; resolve the symbol
+   elsewhere (e.g. `hgnc-link`) and pass that.
 2. **List the gene's panels.** `get_gene_panels(gene_symbol, hgnc_id, region,
    min_confidence)` returns every panel the gene appears on across regions as
    `GenePanelHit` rows (region, panel id/name, version, confidence label/level,

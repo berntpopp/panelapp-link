@@ -97,8 +97,10 @@ def _static_surface() -> dict[str, Any]:
             "region": "uk (Genomics England) | australia | both (default). get_panel and "
             "get_panel_genes require a single concrete region (uk or australia), not both "
             "-- panel ids are per-region.",
-            "gene_symbol": "approved gene symbol (e.g. BRCA1); the query key for "
-            "resolve_gene / get_gene_panels",
+            "gene_symbol": "approved gene symbol (e.g. BRCA1); the required query key "
+            "for get_gene_panels",
+            "query": "resolve_gene lookup: an approved gene symbol or free text (e.g. "
+            "SCN1A). An HGNC CURIE is rejected -- it is not a lookup key",
             "hgnc_id": "HGNC CURIE (e.g. HGNC:1100); OPTIONAL filter over "
             "get_gene_panels results. PanelApp indexes genes by symbol only, so an "
             "HGNC id is never a query key -- gene_symbol (required) drives the query",

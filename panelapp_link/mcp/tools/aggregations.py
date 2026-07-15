@@ -9,7 +9,6 @@ from pydantic import Field
 from panelapp_link.mcp.annotations import READ_ONLY_OPEN_WORLD
 from panelapp_link.mcp.envelope import McpErrorContext, run_mcp_tool
 from panelapp_link.mcp.next_commands import after_compare_panels, after_panels_for_genes
-from panelapp_link.mcp.schemas import COMPARE_PANELS_SCHEMA, GET_PANELS_FOR_GENES_SCHEMA
 from panelapp_link.mcp.service_adapters import get_panelapp_service
 from panelapp_link.models.enums import ConfidenceLabel, Region, ResponseMode
 from panelapp_link.models.inputs import PanelRef
@@ -36,10 +35,15 @@ _PANELS = Annotated[
         min_length=aggregations.MIN_PANELS,
         max_length=aggregations.MAX_PANELS,
         description="2-5 panel refs: [{panel_id:int, region:'uk'|'australia'}].",
+        examples=[[{"panel_id": 90, "region": "uk"}, {"panel_id": 541, "region": "uk"}]],
     ),
 ]
 _SYMBOLS = Annotated[
-    list[str], Field(description="Approved gene symbols (e.g. PKD1); capped at 20 per call.")
+    list[str],
+    Field(
+        description="Approved gene symbols (e.g. PKD1); capped at 20 per call.",
+        examples=[["SCN1A", "SCN2A"]],
+    ),
 ]
 
 
@@ -50,7 +54,7 @@ def register_aggregation_tools(mcp: FastMCP) -> None:
         name="compare_panels",
         title="Compare PanelApp Panels",
         annotations=READ_ONLY_OPEN_WORLD,
-        output_schema=COMPARE_PANELS_SCHEMA,
+        output_schema=None,
         tags={"panel", "compare"},
         description=(
             "Diff genes across 2-5 panels server-side: shared genes, genes unique to "
@@ -89,7 +93,7 @@ def register_aggregation_tools(mcp: FastMCP) -> None:
         name="get_panels_for_genes",
         title="Get Panels for Many Genes",
         annotations=READ_ONLY_OPEN_WORLD,
-        output_schema=GET_PANELS_FOR_GENES_SCHEMA,
+        output_schema=None,
         tags={"gene", "batch"},
         description=(
             "Batch gene->panel membership for up to 20 gene symbols in one call: per "

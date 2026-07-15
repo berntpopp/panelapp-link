@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from panelapp_link.mcp.annotations import READ_ONLY_OPEN_WORLD
 from panelapp_link.mcp.capabilities import build_capabilities
 from panelapp_link.mcp.envelope import McpErrorContext, run_mcp_tool
-from panelapp_link.mcp.schemas import CAPABILITIES_SCHEMA, DIAGNOSTICS_SCHEMA
+from panelapp_link.mcp.schemas import DIAGNOSTICS_SCHEMA
 from panelapp_link.mcp.service_adapters import get_panelapp_service
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ def register_discovery_tools(mcp: FastMCP) -> None:
         name="get_server_capabilities",
         title="Get Server Capabilities",
         annotations=READ_ONLY_OPEN_WORLD,
-        output_schema=CAPABILITIES_SCHEMA,
+        output_schema=None,  # Tool-Surface Budget v1: suppress the (unread) outputSchema.
         tags={"discovery"},
         description=(
             "Return the PanelApp-Link tool inventory, vocabulary (confidence labels "
