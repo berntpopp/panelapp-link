@@ -156,6 +156,19 @@ class PanelAppService:
         return rank
 
     @staticmethod
+    def _validate_panel_id(panel_id: int) -> int:
+        """Reject a non-positive panel id before it is interpolated into a URL.
+
+        PanelApp panel ids are positive integers; ``/panels/-1/`` is not a valid
+        resource. Without this guard a negative id leaked an unrelated real panel
+        (issue #25 D4: ``get_panel(-1)`` returned the COVID-19 panel). Mirrors the
+        ``limit >= 1`` / ``offset >= 0`` boundary guards.
+        """
+        if panel_id < 1:
+            raise InvalidInputError("panel_id must be >= 1.", field="panel_id")
+        return panel_id
+
+    @staticmethod
     def _clamp_limit(limit: int) -> int:
         if limit < 1:
             raise InvalidInputError("limit must be >= 1.", field="limit")
@@ -326,6 +339,7 @@ class PanelAppService:
                 "per-region; 'both' is not allowed).",
                 field="region",
             )
+        self._validate_panel_id(panel_id)
         region_key = self._normalize_region(region)[0]
         detail = await self._panel_detail(region_key, panel_id)
         signed = await self._signed_off_map(region_key)
@@ -360,6 +374,7 @@ class PanelAppService:
                 "region must be 'uk' or 'australia' for get_panel_genes.",
                 field="region",
             )
+        self._validate_panel_id(panel_id)
         region_key = self._normalize_region(region)[0]
         entity_type = self._validate_entity_type(entity_type)
         min_rank = self._min_rank(min_confidence)
