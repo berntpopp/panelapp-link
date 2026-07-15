@@ -117,8 +117,13 @@ def register_panel_tools(mcp: FastMCP) -> None:
             trunc = payload.get("truncated") or {}
             if trunc.get("next_cursor"):
                 # Page-forward first so an agent sweeping next_commands[0] walks
-                # the full result set.
-                nexts.append(cmd("search_panels", region=region, cursor=trunc["next_cursor"]))
+                # the full result set. The cursor is offset-only, so the page-forward
+                # MUST carry every result-set-defining arg (query, region) or the next
+                # page filters a different set at that offset (unrelated panels, a
+                # different total).
+                nexts.append(
+                    cmd("search_panels", query=query, region=region, cursor=trunc["next_cursor"])
+                )
             nexts.extend(after_search_panels(payload.get("panels", [])))
             payload["_meta"] = {"next_commands": nexts[:5]}
             return payload
@@ -199,15 +204,19 @@ def register_panel_tools(mcp: FastMCP) -> None:
             nexts: list[dict[str, Any]] = []
             trunc = payload.get("truncated") or {}
             if trunc.get("next_cursor"):
-                nexts.append(
-                    cmd(
-                        "get_panel_genes",
-                        panel_id=panel_id,
-                        region=region,
-                        entity_type=entity_type,
-                        cursor=trunc["next_cursor"],
-                    )
-                )
+                # The cursor is offset-only, so the page-forward MUST carry every
+                # result-set-defining arg (entity_type AND min_confidence) or the next
+                # page returns a different set at that offset -- e.g. amber+red genes at
+                # an offset computed for a green-only page, with a different total.
+                page_args: dict[str, Any] = {
+                    "panel_id": panel_id,
+                    "region": region,
+                    "entity_type": entity_type,
+                    "cursor": trunc["next_cursor"],
+                }
+                if min_confidence is not None:
+                    page_args["min_confidence"] = min_confidence
+                nexts.append(cmd("get_panel_genes", **page_args))
             payload["_meta"] = {"next_commands": nexts[:5]}
             return payload
 

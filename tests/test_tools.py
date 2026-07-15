@@ -115,6 +115,43 @@ async def test_get_panel_genes_entity_type_filter(mcp_client: Client) -> None:
     assert all(e["entity_type"] == "str" for e in strs["entities"])
 
 
+async def test_search_panels_pagination_breadcrumb_carries_query(mcp_client: Client) -> None:
+    """#25 rework: the offset-only cursor page-forward must keep `query`.
+
+    Without it, following next_commands[0] re-filters with query='' at that offset --
+    a different result set and total.
+    """
+    result = await mcp_client.call_tool(
+        "search_panels", {"query": "acute", "region": "uk", "limit": 1}
+    )
+    data = result.structured_content
+    assert data["has_more"] is True
+    page_fwd = data["_meta"]["next_commands"][0]
+    assert page_fwd["tool"] == "search_panels"
+    assert page_fwd["arguments"]["query"] == "acute"
+    assert "cursor" in page_fwd["arguments"]
+
+
+async def test_get_panel_genes_pagination_breadcrumb_keeps_min_confidence(
+    mcp_client: Client,
+) -> None:
+    """#25 rework: a green-only page-forward must keep min_confidence.
+
+    Otherwise the next page returns amber+red genes at an offset computed for the
+    green-only set, with a different total.
+    """
+    result = await mcp_client.call_tool(
+        "get_panel_genes",
+        {"panel_id": 285, "region": "uk", "min_confidence": "green", "limit": 1},
+    )
+    data = result.structured_content
+    assert data["has_more"] is True
+    page_fwd = data["_meta"]["next_commands"][0]
+    assert page_fwd["tool"] == "get_panel_genes"
+    assert page_fwd["arguments"]["min_confidence"] == "green"
+    assert "cursor" in page_fwd["arguments"]
+
+
 async def test_get_panel_genes_min_confidence_filter(mcp_client: Client) -> None:
     unfiltered = (
         await mcp_client.call_tool("get_panel_genes", {"panel_id": 285, "region": "uk"})
