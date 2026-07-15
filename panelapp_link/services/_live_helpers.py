@@ -111,7 +111,17 @@ def gene_identity(
     results: list[tuple[str, dict[str, Any]]],
     hits: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Roll a gene identity (symbol, hgnc id, panel count, regions, max label) up."""
+    """Roll a gene identity (symbol, hgnc id, panel count, regions, max label) up.
+
+    ``symbol``/``hgnc_id`` are gene METADATA and come from ``results`` (every raw
+    hit carries the same identity, filtered out or not). But ``panel_count``,
+    ``regions``, and ``max_confidence_label`` are properties of the RETURNED set,
+    so they are derived from ``hits`` -- the post-filter rows the caller already
+    shaped into ``panels``. Keying them off ``results`` was issue #25 D1: a
+    ``min_confidence=green`` call reported ``panel_count`` from the unfiltered
+    ``len(results)`` (e.g. 13) beside a 10-element green ``panels`` array, so the
+    count contradicted the array and matched the unfiltered call.
+    """
     gene_symbol = symbol.upper()
     hgnc_id: str | None = None
     for _region_key, result in results:
@@ -121,7 +131,7 @@ def gene_identity(
         if hgnc_id is None and gene_data.get("hgnc_id"):
             hgnc_id = gene_data["hgnc_id"]
 
-    regions = sorted({region_key for region_key, _ in results})
+    regions = sorted({str(hit.get("region")) for hit in hits if hit.get("region")})
     max_rank = 0
     max_label: str | None = None
     for hit in hits:
@@ -132,7 +142,7 @@ def gene_identity(
     return {
         "gene_symbol": gene_symbol,
         "hgnc_id": hgnc_id,
-        "panel_count": len(results),
+        "panel_count": len(hits),
         "regions": regions,
         "max_confidence_label": max_label,
     }
