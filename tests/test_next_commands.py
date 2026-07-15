@@ -129,7 +129,7 @@ class TestRecoveryCommands:
         assert out == [{"tool": "get_server_capabilities", "arguments": {}}]
 
     def test_unknown_returns_empty(self) -> None:
-        assert nc.recovery_commands("search_panels", "internal_error", {}, None) == []
+        assert nc.recovery_commands("search_panels", "internal", {}, None) == []
 
     @pytest.mark.parametrize(
         "tool, error_code, args, field",

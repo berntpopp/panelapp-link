@@ -63,7 +63,10 @@ _FIXED_MESSAGES: dict[str, str] = {
         "The requested PanelApp record was not found. "
         "Use search_panels or resolve_gene to find a valid identifier."
     ),
-    "limit_exceeded": (
+    # A response-size cap breach is client-actionable (narrow the request), so it is
+    # surfaced as invalid_input (the closed enum has no dedicated limit code); the
+    # message tells the model exactly how to reformulate.
+    "response_too_large": (
         "The response exceeded the untrusted-text size or count limit. "
         "Re-call with a smaller limit or a lower response_mode."
     ),
@@ -220,7 +223,7 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
         # A blocked outbound URL/redirect (F-17) is a fixed, opaque, NON-retryable
         # failure: retrying re-issues the identical blocked request. The blocked
         # URL/host is never surfaced (the exception message is already fixed).
-        return "internal_error", "An internal error occurred. The request was not completed.", False
+        return "internal", "An internal error occurred. The request was not completed.", False
     if isinstance(exc, RateLimitError):
         return "rate_limited", "PanelApp API rate limit hit. Try again later.", True
     if isinstance(exc, DownloadError):
@@ -229,9 +232,11 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
         # str(exc) embeds the caller's query/identifier -> use the fixed message.
         return "not_found", _FIXED_MESSAGES["not_found"], False
     if isinstance(exc, UntrustedTextLimitError):
-        # Response-Envelope v1.1 forbids silent omission on a limit breach; surface
-        # it as an explicit typed limit error, never a generic internal_error.
-        return "limit_exceeded", _FIXED_MESSAGES["limit_exceeded"], False
+        # Response-Envelope v1.1 forbids silent omission on a limit breach. The error
+        # code is closed to the six-value enum, which has no dedicated limit code, so
+        # this maps to invalid_input (client-actionable: narrow the request) -- never a
+        # generic, non-actionable internal.
+        return "invalid_input", _FIXED_MESSAGES["response_too_large"], False
     if isinstance(exc, InvalidInputError):
         # exc.message is server-authored (static guidance; the rejected value is not
         # interpolated at the raise sites). exc.field is a fixed schema field name.
@@ -241,13 +246,13 @@ def _classify(exc: BaseException) -> tuple[str, str, bool]:
         first = exc.errors()[0]
         field = _safe_pydantic_field(first)
         return "invalid_input", f"Invalid input -- `{field}`: {_pydantic_reason(first)}", False
-    return "internal_error", "An internal error occurred. The request was not completed.", False
+    return "internal", "An internal error occurred. The request was not completed.", False
 
 
 def _recovery_action(error_code: str) -> str:
     if error_code in {"rate_limited", "upstream_unavailable"}:
         return "retry_backoff"
-    if error_code in {"invalid_input", "limit_exceeded"}:
+    if error_code == "invalid_input":
         return "reformulate_input"
     if error_code == "not_found":
         return "switch_tool"

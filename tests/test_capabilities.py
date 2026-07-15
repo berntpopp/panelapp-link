@@ -59,9 +59,14 @@ class TestBuildCapabilities:
             "not_found",
             "upstream_unavailable",
             "rate_limited",
-            "internal_error",
+            "internal",
         ):
             assert code in codes
+        # Closed to the fleet six-value enum: the legacy internal_error / limit_exceeded
+        # codes are gone (internal_error -> internal; a ceiling breach -> invalid_input).
+        assert "internal_error" not in codes
+        assert "limit_exceeded" not in codes
+        assert "limit_exceeded" not in caps["error_codes_list"]
         assert "ambiguous_query" not in codes
         assert "ambiguous_query" not in caps["error_codes_list"]
         assert "data_unavailable" not in codes

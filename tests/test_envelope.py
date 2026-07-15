@@ -72,7 +72,7 @@ class TestErrorClassification:
             (NotFoundError("nope"), "not_found", False, "switch_tool"),
             (RateLimitError("limit"), "rate_limited", True, "retry_backoff"),
             (DownloadError("net"), "upstream_unavailable", True, "retry_backoff"),
-            (RuntimeError("boom"), "internal_error", False, "retry_backoff"),
+            (RuntimeError("boom"), "internal", False, "retry_backoff"),
         ],
     )
     async def test_codes(self, exc: Exception, code: str, retryable: bool, recovery: str) -> None:

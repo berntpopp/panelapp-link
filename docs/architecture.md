@@ -220,10 +220,12 @@ across both regions on the fly.
 ## Error taxonomy
 
 `invalid_input`, `not_found`, `upstream_unavailable` (API fetch failure),
-`rate_limited` (429/403 from PanelApp), `limit_exceeded` (untrusted-text size /
-count cap), `internal_error`. This is the same list `get_server_capabilities`
-advertises as `error_codes_list`, and it is exactly what `envelope._classify`
-emits — no other code is ever returned. Error
+`rate_limited` (429/403 from PanelApp), `internal`. The error code is closed to
+the fleet's six-value enum; an untrusted-text size/count cap breach is
+client-actionable and is reported as `invalid_input` (narrow the request), not a
+dedicated code. This is the same list `get_server_capabilities` advertises as
+`error_codes_list`, and it is exactly what `envelope._classify` emits — no other
+code is ever returned. Error
 details are masked; the base `_meta` carries the research-use and license
 markers, and error envelopes still hand back recovery `next_commands`.
 

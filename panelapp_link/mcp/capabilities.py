@@ -115,7 +115,8 @@ def _static_surface() -> dict[str, Any]:
             {
                 "code": "invalid_input",
                 "operational_only": False,
-                "when": "malformed/out-of-vocab argument; carries field_errors",
+                "when": "malformed/out-of-vocab argument (carries field_errors), or a "
+                "response that would exceed a v1.1 untrusted-text ceiling (narrow the request)",
             },
             {
                 "code": "not_found",
@@ -133,13 +134,7 @@ def _static_surface() -> dict[str, Any]:
                 "when": "PanelApp rate-limited the request (HTTP 429)",
             },
             {
-                "code": "limit_exceeded",
-                "operational_only": False,
-                "when": "a response exceeds a v1.1 untrusted-text ceiling "
-                "(object count / bytes); narrow the request",
-            },
-            {
-                "code": "internal_error",
+                "code": "internal",
                 "operational_only": True,
                 "when": "unexpected server fault",
             },
@@ -149,8 +144,7 @@ def _static_surface() -> dict[str, Any]:
             "not_found",
             "upstream_unavailable",
             "rate_limited",
-            "limit_exceeded",
-            "internal_error",
+            "internal",
         ],
         "observability": {
             "metrics_endpoint": "GET /metrics (Prometheus text 0.0.4; HTTP/unified transport)",

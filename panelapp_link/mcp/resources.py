@@ -82,7 +82,7 @@ PANELAPP_REFERENCE_NOTES = (
     "Panels record their latest version plus a signed_off "
     "version and signed_off_date when a release has been signed off. "
     "Error codes: invalid_input, not_found, "
-    "upstream_unavailable, rate_limited, limit_exceeded, internal_error. Errors "
+    "upstream_unavailable, rate_limited, internal. Errors "
     "carry retryable + recovery_action; invalid_input adds field_errors (a list of "
     "{field, reason}). Paging contract: search_panels and get_panel_genes "
     "return a truncated block with next_cursor; pass it back as "

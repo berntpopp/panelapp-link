@@ -137,7 +137,7 @@ async def test_limit_exceeded_uses_fixed_message() -> None:
     async with _client_raising(UntrustedTextLimitError(f"boom {HOSTILE}")) as client:
         res = await client.call_tool("resolve_gene", {"query": "x"}, raise_on_error=False)
     structured, mirror = _mirrors(res)
-    assert structured["error_code"] == "limit_exceeded"
+    assert structured["error_code"] == "invalid_input"
     _assert_clean(structured)
     _assert_clean(mirror)
 
