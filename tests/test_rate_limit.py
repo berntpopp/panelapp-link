@@ -94,10 +94,13 @@ async def test_facade_rate_limits_when_configured(live_service: Any) -> None:
         mcp = create_panelapp_mcp()
         async with Client(mcp) as client:
             first = (await client.call_tool("search_panels", {"region": "uk"})).structured_content
-            second = (await client.call_tool("get_server_capabilities", {})).structured_content
+            second = await client.call_tool(
+                "get_server_capabilities", {}, raise_on_error=False
+            )
         assert first["success"] is True
-        assert second["success"] is False
-        assert second["error_code"] == "rate_limited"
+        assert second.is_error is True  # rate-limit rejection carries isError:true
+        assert second.structured_content["success"] is False
+        assert second.structured_content["error_code"] == "rate_limited"
     finally:
         settings.mcp_rate_limit_per_minute = original
         set_service_for_testing(None)

@@ -211,7 +211,10 @@ async def test_tool_meta_surfaces_cache_and_upstream_timing(mcp_client: Client) 
 
 
 async def test_get_panel_region_both_is_invalid_input(mcp_client: Client) -> None:
-    result = await mcp_client.call_tool("get_panel", {"panel_id": 285, "region": "both"})
+    result = await mcp_client.call_tool(
+        "get_panel", {"panel_id": 285, "region": "both"}, raise_on_error=False
+    )
+    assert result.is_error is True  # error envelopes carry MCP isError:true
     data = result.structured_content
     assert data["success"] is False
     assert data["error_code"] == "invalid_input"
@@ -219,14 +222,18 @@ async def test_get_panel_region_both_is_invalid_input(mcp_client: Client) -> Non
 
 
 async def test_resolve_gene_no_args_is_invalid_input(mcp_client: Client) -> None:
-    result = await mcp_client.call_tool("resolve_gene", {})
+    result = await mcp_client.call_tool("resolve_gene", {}, raise_on_error=False)
+    assert result.is_error is True
     data = result.structured_content
     assert data["success"] is False
     assert data["error_code"] == "invalid_input"
 
 
 async def test_get_gene_panels_unknown_gene_is_not_found(mcp_client: Client) -> None:
-    result = await mcp_client.call_tool("get_gene_panels", {"gene_symbol": "NOTAGENE"})
+    result = await mcp_client.call_tool(
+        "get_gene_panels", {"gene_symbol": "NOTAGENE"}, raise_on_error=False
+    )
+    assert result.is_error is True
     data = result.structured_content
     assert data["success"] is False
     assert data["error_code"] == "not_found"
