@@ -7,15 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-15
+
 ### Changed
 
 - Re-vendored the behaviour conformance gate from genefoundry-router `56db958`
   (`docs/conformance/behaviour.py` blob `c69801687`) so live MCP contract checks
   treat not-found example probes as inconclusive and keep empty auxiliary objects from hiding counted rows.
-
-## [0.6.0] - 2026-07-15
-
-### Changed
 
 - **BREAKING (`resolve_gene`):** the tool now takes a single required `query`
   (an approved gene symbol or free text); the redundant, un-exampleable
