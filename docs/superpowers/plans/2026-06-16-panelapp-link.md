@@ -1,5 +1,8 @@
 # panelapp-link Implementation Plan
 
+> Historical record — this plan records the proposed implementation as of its date. Current
+> behavior is defined by implemented code, standards, release evidence, and tests.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan workstream-by-workstream. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build `panelapp-link`, a read-only MCP/API server that mirrors PanelApp (Genomics England UK + PanelApp Australia) into local SQLite and answers panel/gene questions, as a drop-in sibling of the `*-link` fleet.
