@@ -2,6 +2,10 @@
 
 - **Date:** 2026-06-17
 - **Status:** Approved (design)
+
+> Historical record — this design records the proposed system as of its date. Current behavior is
+> defined by implemented code, standards, release evidence, and tests.
+
 - **Author:** Senior MCP engineering review
 - **Scope decision:** Ship + fix (full) — commit the in-flight observability/cache/
   rate-limit work, fix the remaining contract/quality/latency gaps, flip `prewarm`

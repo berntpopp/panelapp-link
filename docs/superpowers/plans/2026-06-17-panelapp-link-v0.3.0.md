@@ -1,5 +1,8 @@
 # PanelApp-Link v0.3.0 ("Beyond 9/10" Phase 2) Implementation Plan
 
+> Historical record — this plan records the proposed implementation as of its date. Current
+> behavior is defined by implemented code, standards, release evidence, and tests.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix the full-mode field-rename contract bug, add two aggregation/batch MCP tools, trim per-call tokens, and light up opt-in OTel — taking the server from 8.5 to >9/10 without breaking the live-API, single-worker posture.

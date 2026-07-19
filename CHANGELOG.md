@@ -20,8 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `gene_symbol` alias is dropped. `query` was already `resolve_gene`'s canonical
   chaining key, and collapsing to one required, example-carrying key makes the
   contract unambiguous and lets the behaviour gate build a valid call for it.
-  Callers that passed `resolve_gene(gene_symbol=...)` must pass
-  `resolve_gene(query=...)`. `get_gene_panels` still takes `gene_symbol`.
+  Callers that passed the former `gene_symbol` argument to `resolve_gene` must
+  now pass `resolve_gene(query=...)`. `get_gene_panels` still takes `gene_symbol`.
 - **Tool-Schema Documentation Standard v1:** every input property now carries a
   `description`, every required + array parameter carries `examples`
   (`gene_symbol`, `panel_id`, `region`, `panels`, `gene_symbols`), closed

@@ -2,6 +2,10 @@
 
 - **Date:** 2026-06-17
 - **Status:** Approved (design) — rev. 2 (external Codex review incorporated)
+
+> Historical record — this design records the proposed system as of its date. Current behavior is
+> defined by implemented code, standards, release evidence, and tests.
+
 - **Author:** Senior MCP engineering review (LLM-consumer perspective)
 - **Rev. 2 changes (Codex review, all 7 findings verified against code & accepted):**
   (1) `confidence_counts` added as a sibling field — `entity_counts` stays integer

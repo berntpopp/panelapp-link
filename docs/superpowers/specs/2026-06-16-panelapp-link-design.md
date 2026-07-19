@@ -2,6 +2,9 @@
 
 **Status:** approved 2026-06-16 · **Author:** systems engineering · **Mission:** drop-in sibling of the `*-link` fleet that grounds gene-panel questions in PanelApp data (Genomics England UK **and** PanelApp Australia).
 
+> Historical record — this design records the proposed system as of its date. Current behavior is
+> defined by implemented code, standards, release evidence, and tests.
+
 ## 1. Goal & scope
 
 A read-only MCP/API server that mirrors PanelApp into local SQLite and answers panel/gene questions over both regions. It must be idiomatically identical to `gencc-link` / `hgnc-link`: same stack, layout, envelope, response modes, resources, ingest CLI, tooling, Docker, CI.
