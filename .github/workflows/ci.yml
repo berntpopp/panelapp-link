@@ -27,6 +27,15 @@ jobs:
         # base-image bump can never ship an interpreter CI has not exercised.
         python-version: ["3.12", "3.14"]
 
+    # The matrix only works today because this repo happens to have no
+    # `.python-version` file, leaving uv to follow PATH. Adding one would silently
+    # collapse both legs onto a single interpreter while CI still reported two —
+    # the exact blind spot the matrix exists to close. `UV_PYTHON` outranks
+    # `.python-version`, so each leg runs the interpreter it is named after by
+    # statement rather than by accident.
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
