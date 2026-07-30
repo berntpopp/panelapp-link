@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-30
+
+### Added
+
+- **Dependabot coverage** (`.github/dependabot.yml`). This repo had no Dependabot
+  config, so Dependabot ran *security* updates only — routine version updates for
+  Python dependencies, GitHub Actions and the digest-pinned container base were
+  never proposed at all. "0 open Dependabot PRs" was the absence of a watcher, not
+  health. Adopts the fleet-canonical four-ecosystem config: `uv` @ `/`,
+  `github-actions` @ `/`, `docker` @ `/docker`, `docker-compose` @ `/docker`;
+  weekly Monday Europe/Berlin, staggered 04:00/04:15/04:30/04:45, limit 5, `deps`
+  prefix for packages and `ci` for Actions.
+
+### Changed
+
+- **Lockfile swept** (`uv lock --upgrade`, 45 packages) — the first blanket upgrade
+  since the watcher was missing. Notably fastapi 0.137.1 → 0.141.1, uvicorn 0.49.0
+  → 0.52.0, mcp 1.28.1 → 1.29.0, fastmcp 3.4.4 → 3.4.5, mypy 2.1.0 → 2.3.0, ruff
+  0.15.17 → 0.16.0, pytest 9.1.0 → 9.1.1, typer 0.26.7 → 0.27.0, opentelemetry-\*
+  1.42.1 → 1.44.0, protobuf 6.33.6 → 7.35.1, websockets 16.0 → 17.0, certifi
+  2026.5.20 → 2026.7.22. `pyproject` floors are unchanged: this repo uses
+  minimum-supported bounds with major upper caps and does not mirror the lock.
+- **Ruff rule set pinned with `select`** instead of `extend-select`. ruff 0.16
+  grows its implicit default rule set from 59 to 413 rules, so `extend-select`
+  would have silently inherited ~350 rules this project never opted into. The rule
+  list is unchanged and already supersets ruff's pre-0.16 default (E4/E7/E9 + F),
+  so the enforced policy is byte-identical and no suppression was added.
+- **Container base digest refreshed** — `python:3.12-slim` repinned from
+  `sha256:423ed6ab…` to the current `sha256:57cd7c3a…710de`, picking up the Debian
+  security rebuilds missed since the original hardening commit. Deliberately stays
+  on the 3.12 line (`requires-python >=3.12`, CI pins python-version `"3.12"`, and
+  the image lays the venv down at `/opt/venv/lib/python3.12/site-packages`).
+  Verified against the new digest: Debian 13.6, Python 3.12.13, the `perl` /
+  `perl5.40.1` hardlink pair the Dockerfile asserts on is intact, the production
+  build is green and the container answers `/health`.
+- **Action pins refreshed**, each verified against upstream tag refs with annotated
+  tag objects dereferenced: `actions/checkout` → `3d3c42e5` v7.0.1,
+  `actions/setup-python` → `5fda3b95` v7.0.0, `astral-sh/setup-uv` → `c771a70e`
+  v9.0.0. `release.yml` was the straggler — its checkout pin was a whole major
+  behind (`df4cb1c0` is v6.0.3, which the bare `# v6` comment hid).
+  `aquasecurity/trivy-action` (v0.36.0), `actions/upload-artifact` (v7.0.1) and
+  `actions/dependency-review-action` (v5.0.0) were verified honest and already
+  latest, so they are unchanged.
+
+### Fixed
+
+- **CodeQL was not pinned to a commit at all.**
+  `github/codeql-action@ed410739… # v4` is the annotated *tag object* for the
+  moving `v4` tag; it dereferences to commit `e46ed2cb` = release v4.35.3.
+  Dependabot cannot track a tag-object SHA, so the pin was simultaneously frozen
+  and invisible to tooling while the `# v4` comment hid it. Both `init` and
+  `analyze` are now pinned to the commit for **v4.37.4**, matching
+  genefoundry-router v0.7.3.
+- `CITATION.cff` reported version `0.5.7` while the project was at `0.6.0` — two
+  releases behind, which the router's `citation --check` gate flags. Synced to
+  `0.6.1` with `date-released` corrected to the v0.6.0 release date.
+
 ## [0.6.0] - 2026-07-15
 
 ### Changed
