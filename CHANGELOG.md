@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-07-30
+
+### Changed
+
+- **Migrated the container to CPython 3.14** (`python:3.12-slim` →
+  `python:3.14-slim`, Debian 13.6, CPython 3.12.13 → 3.14.6) in **both** build
+  stages. Superseded the bare Dependabot base bump (#32): shipping a 3.14
+  interpreter while every quality gate still ran on 3.12 would have deployed an
+  interpreter CI had never executed. The base image, the CI matrix and the
+  type-checker target move together here.
+- **CI now runs a Python matrix (`3.12`, `3.14`)** instead of a single 3.12 job.
+  3.12 is the `requires-python` floor; 3.14 is what the container ships. Testing
+  both ends means a future base-image bump inside the supported range can never
+  ship an untested interpreter. The coverage gate runs once, on 3.14.
+- **Release validation (`release.yml`) now runs on 3.14**, the interpreter the
+  tagged image actually ships. The 3.12 floor stays covered by the CI matrix.
+- **Unpinned mypy's `python_version`.** It was fixed at `3.12`, so it would have
+  kept modelling 3.12 semantics no matter which interpreter ran it — blind to
+  stdlib symbols removed in 3.13/3.14. Unpinned, each matrix job type-checks its
+  own interpreter, so the shipped 3.14 runtime is now statically checked as 3.14.
+
+### Notes
+
+- `requires-python` deliberately stays `>=3.12` and ruff's `target-version`
+  deliberately stays `py312`. Both track the supported *floor*, not the shipped
+  interpreter: `>=3.12` is satisfied by the 3.14 container, and a `py314` ruff
+  target would let the `UP` rules rewrite code into syntax the declared floor
+  cannot run. Raising the floor would also contradict the `Python 3.12+` badge
+  that README Standard v1 pins by exact string in the vendored
+  `scripts/check_readme.py`.
+- `container-release.json` needs no change: `data.mode` is `"none"` and
+  `data.image_allowlist` is empty, so this image declares no interpreter-versioned
+  content paths for the router's OCI content inspector.
+
 ## [0.6.1] - 2026-07-30
 
 ### Added

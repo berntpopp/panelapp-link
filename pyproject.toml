@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "panelapp-link"
-version = "0.6.1"
+version = "0.6.2"
 description = "MCP/API server for PanelApp (Genomics England UK + PanelApp Australia) gene-panel data"
 readme = "README.md"
 license = { text = "MIT" }
@@ -28,6 +28,9 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Typing :: Typed",
 ]
+# 3.12 is the supported FLOOR, not the shipped interpreter. The container ships
+# CPython 3.14 (docker/Dockerfile) and CI tests both ends of the range, so the
+# interpreter that ships is always one CI has exercised.
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0,<1.0.0",
@@ -84,6 +87,9 @@ packages = ["panelapp_link"]
 
 [tool.ruff]
 line-length = 100
+# Tracks the `requires-python` FLOOR (3.12), not the shipped interpreter (3.14):
+# targeting py314 here would let the `UP` rules rewrite code into 3.14-only
+# syntax that the declared 3.12 floor could not run.
 target-version = "py312"
 
 [tool.ruff.lint]
@@ -114,7 +120,10 @@ line-ending = "lf"
 convention = "google"
 
 [tool.mypy]
-python_version = "3.12"
+# Deliberately UNPINNED. A pinned `python_version` would type-check one end of the
+# supported range on every job; without it mypy checks whatever interpreter runs
+# it, so the CI matrix checks the 3.12 floor as 3.12 and the shipped 3.14
+# container interpreter as 3.14 -- including symbols removed in 3.13/3.14.
 strict = true
 warn_return_any = true
 warn_unused_configs = true
