@@ -97,6 +97,19 @@ async def test_get_panel_signed_off_annotation(live_service: PanelAppService) ->
     assert "signed_off_version" in out["panel"]
 
 
+async def test_mutating_get_panel_response_cannot_mutate_cached_detail(
+    live_service: PanelAppService,
+) -> None:
+    first = await live_service.get_panel(panel_id=285, region="uk", response_mode="compact")
+    original = list(first["panel"]["relevant_disorders"])
+    assert original
+    first["panel"]["relevant_disorders"].append("caller mutation")
+
+    second = await live_service.get_panel(panel_id=285, region="uk", response_mode="compact")
+
+    assert second["panel"]["relevant_disorders"] == original
+
+
 async def test_get_panel_both_region_rejected(live_service: PanelAppService) -> None:
     with pytest.raises(InvalidInputError) as exc:
         await live_service.get_panel(panel_id=285, region="both")

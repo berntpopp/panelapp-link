@@ -31,7 +31,14 @@ class GenerationClient:
         region = "uk" if "uk.test" in base else "australia"
         self._maybe_fail(f"{region}_panels")
         panel_id = 1 if region == "uk" else 2
-        return [{"id": panel_id, "name": f"{self.generation}-{region}", "version": "1"}]
+        return [
+            {
+                "id": panel_id,
+                "name": f"{self.generation}-{region}",
+                "version": "1",
+                "relevant_disorders": [f"{self.generation}-disorder"],
+            }
+        ]
 
     async def list_signed_off(self, base: str) -> list[dict[str, Any]]:
         region = "uk" if "uk.test" in base else "australia"
@@ -213,6 +220,17 @@ async def test_generation_publication_exposes_only_complete_old_or_new_results()
     }
     assert all(_generation_pairs(result) == complete_old for result in during)
     assert all(_generation_pairs(result) == complete_new for result in after)
+
+
+async def test_mutating_search_response_cannot_mutate_published_generation() -> None:
+    service = _generation_service(GenerationClient())
+
+    first = await service.search_panels(region="uk", limit=10)
+    first["panels"][0]["relevant_disorders"].append("caller mutation")
+
+    second = await service.search_panels(region="uk", limit=10)
+
+    assert second["panels"][0]["relevant_disorders"] == ["old-disorder"]
 
 
 @pytest.mark.parametrize(

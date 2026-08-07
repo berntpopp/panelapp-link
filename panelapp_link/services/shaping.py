@@ -29,6 +29,7 @@ Verbosity contract (entities):
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from panelapp_link.constants import CONFIDENCE_RANK, confidence_label
@@ -108,8 +109,8 @@ def normalize_panel(
         "disease_sub_group": live.get("disease_sub_group"),
         "status": live.get("status"),
         "description": live.get("description"),
-        "relevant_disorders": live.get("relevant_disorders") or [],
-        "types": live.get("types") or [],
+        "relevant_disorders": deepcopy(live.get("relevant_disorders") or []),
+        "types": deepcopy(live.get("types") or []),
         "number_of_genes": int(stats.get("number_of_genes") or 0),
         "number_of_regions": int(stats.get("number_of_regions") or 0),
         "number_of_strs": int(stats.get("number_of_strs") or 0),
