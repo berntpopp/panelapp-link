@@ -95,13 +95,17 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
         """Liveness probe. Reports the live backend status (no network call)."""
-        from panelapp_link.mcp.capabilities import _data_status
+        from panelapp_link.mcp.service_adapters import get_panelapp_service
+
+        service = get_panelapp_service()
+        data = service.capabilities_data()
+        data["refresh"] = service.refresh_snapshot()
 
         return {
             "status": "ok",
             "version": __version__,
             "transport": "streamable-http-stateless",
-            "data": _data_status(),
+            "data": data,
         }
 
     @app.get("/metrics")
@@ -111,7 +115,10 @@ def create_app() -> FastAPI:
         tool/upstream duration percentiles, cache hit ratio). Hand-rendered, so
         no scrape-side dependency is required.
         """
+        from panelapp_link.mcp.service_adapters import get_panelapp_service
         from panelapp_link.observability.metrics import get_metrics
+
+        get_panelapp_service().refresh_snapshot()
 
         return Response(
             content=get_metrics().render_prometheus(),

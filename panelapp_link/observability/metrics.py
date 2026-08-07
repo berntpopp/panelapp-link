@@ -20,6 +20,7 @@ from collections import defaultdict, deque
 from typing import Any
 
 _WINDOW = 2048  # recent samples retained per histogram for percentile estimates
+_REFRESH_STATUSES = ("disabled", "initializing", "healthy", "degraded", "stale")
 
 
 def _percentile(ordered: list[float], pct: float) -> float:
@@ -70,6 +71,10 @@ class MetricsRegistry:
         self._cache: dict[str, int] = defaultdict(int)
         self._tool_durations: dict[str, _Histogram] = defaultdict(_Histogram)
         self._upstream_durations: dict[str, _Histogram] = defaultdict(_Histogram)
+        self._refresh_failures_total = 0
+        self._refresh_consecutive_failures = 0
+        self._refresh_age_seconds: float | None = None
+        self._refresh_status = "initializing"
 
     # --- recording ------------------------------------------------------
 
@@ -91,6 +96,23 @@ class MetricsRegistry:
         with self._lock:
             self._upstream_durations[region].observe(duration_ms)
 
+    def record_refresh(
+        self,
+        *,
+        failures_total: int,
+        consecutive_failures: int,
+        age_seconds: float | None,
+        status: str,
+    ) -> None:
+        """Publish bounded refresh counters/gauges without error-type labels."""
+        if status not in _REFRESH_STATUSES:
+            raise ValueError("refresh status must be a bounded public status")
+        with self._lock:
+            self._refresh_failures_total = failures_total
+            self._refresh_consecutive_failures = consecutive_failures
+            self._refresh_age_seconds = age_seconds
+            self._refresh_status = status
+
     def reset(self) -> None:
         """Drop all counters/histograms (test isolation)."""
         with self._lock:
@@ -99,6 +121,10 @@ class MetricsRegistry:
             self._cache.clear()
             self._tool_durations.clear()
             self._upstream_durations.clear()
+            self._refresh_failures_total = 0
+            self._refresh_consecutive_failures = 0
+            self._refresh_age_seconds = None
+            self._refresh_status = "initializing"
 
     # --- reporting ------------------------------------------------------
 
@@ -129,6 +155,12 @@ class MetricsRegistry:
                 "upstream_duration_ms": {
                     region: hist.snapshot() for region, hist in self._upstream_durations.items()
                 },
+                "refresh": {
+                    "failures_total": self._refresh_failures_total,
+                    "consecutive_failures": self._refresh_consecutive_failures,
+                    "age_seconds": self._refresh_age_seconds,
+                    "status": self._refresh_status,
+                },
             }
 
     def render_prometheus(self) -> str:
@@ -149,6 +181,25 @@ class MetricsRegistry:
             lines.append("# TYPE panelapp_cache_events_total counter")
             for result, count in sorted(self._cache.items()):
                 lines.append(f'panelapp_cache_events_total{{result="{result}"}} {count}')
+
+            lines.extend(
+                [
+                    "# HELP panelapp_refresh_failures_total Total failed panel-list refreshes.",
+                    "# TYPE panelapp_refresh_failures_total counter",
+                    f"panelapp_refresh_failures_total {self._refresh_failures_total}",
+                    "# HELP panelapp_refresh_consecutive_failures Current failed refresh streak.",
+                    "# TYPE panelapp_refresh_consecutive_failures gauge",
+                    f"panelapp_refresh_consecutive_failures {self._refresh_consecutive_failures}",
+                    "# HELP panelapp_refresh_age_seconds Age of the last complete generation.",
+                    "# TYPE panelapp_refresh_age_seconds gauge",
+                    f"panelapp_refresh_age_seconds {self._refresh_age_seconds or 0.0}",
+                    "# HELP panelapp_refresh_status Current bounded refresh status.",
+                    "# TYPE panelapp_refresh_status gauge",
+                ]
+            )
+            for status in _REFRESH_STATUSES:
+                value = 1 if status == self._refresh_status else 0
+                lines.append(f'panelapp_refresh_status{{status="{status}"}} {value}')
 
             _render_summary(
                 lines,

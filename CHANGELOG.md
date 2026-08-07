@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-07
+
+### Added
+
+- Panel-list refreshes now publish one immutable UK/Australia generation only
+  after all four list fetches succeed. Failed refreshes preserve the prior
+  complete generation, and concurrent readers capture one consistent reference.
+- Caller-visible refresh freshness is available from diagnostics at
+  `data.refresh`, HTTP health at `data.refresh`, and the `search_panels` and
+  `get_panel` tools at `_meta.data_freshness`. Health remains a liveness signal
+  with HTTP 200 and outer `status: ok` during degraded or stale refresh states.
+- Prometheus refresh metrics report total and consecutive failures, generation
+  age, and one bounded `disabled|initializing|healthy|degraded|stale` status.
+
 ## [0.6.2] - 2026-07-30
 
 ### Changed

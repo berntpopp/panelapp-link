@@ -294,6 +294,12 @@ async def test_upstream_5xx_end_to_end_severs_body(monkeypatch: pytest.MonkeyPat
     """A caller-influenced upstream 500 (hostile body) drives the real client +
     facade -> fixed upstream_unavailable message, nothing leaked."""
     monkeypatch.setattr("panelapp_link.api.client.asyncio.sleep", _no_sleep)
+    empty_page = {"count": 0, "next": None, "previous": None, "results": []}
+    for base in (_UK, _AU):
+        respx.get(f"{base}/panels/").mock(return_value=httpx.Response(200, json=empty_page))
+        respx.get(f"{base}/panels/signedoff/").mock(
+            return_value=httpx.Response(200, json=empty_page)
+        )
     respx.get(f"{_UK}/panels/1207/").mock(return_value=httpx.Response(500, text=HOSTILE))
     rest = PanelAppRestClient(_cfg())
     service = PanelAppService(rest, _cfg(), cache_ttl=3600, cache_size=512)

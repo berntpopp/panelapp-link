@@ -21,6 +21,8 @@ from panelapp_link.models.enums import (
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
+    from panelapp_link.services.panelapp_service import PanelAppService
+
 _MODE = Annotated[
     ResponseMode,
     Field(description="Verbosity: minimal | compact | standard | full (default compact)."),
@@ -81,6 +83,17 @@ _MIN_CONFIDENCE = Annotated[
 ]
 
 
+def _merge_panel_meta(
+    payload: dict[str, Any],
+    service: PanelAppService,
+    next_commands: list[dict[str, Any]],
+) -> None:
+    """Merge freshness and next steps without discarding existing metadata."""
+    meta = payload.setdefault("_meta", {})
+    meta["data_freshness"] = service.refresh_snapshot()
+    meta["next_commands"] = next_commands
+
+
 def register_panel_tools(mcp: FastMCP) -> None:
     """Register panel-category tools (search_panels, get_panel, get_panel_genes)."""
 
@@ -105,7 +118,8 @@ def register_panel_tools(mcp: FastMCP) -> None:
         cursor: _CURSOR = None,
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
-            payload = await get_panelapp_service().search_panels(
+            service = get_panelapp_service()
+            payload = await service.search_panels(
                 query,
                 region=region,
                 response_mode=response_mode,
@@ -125,7 +139,7 @@ def register_panel_tools(mcp: FastMCP) -> None:
                     cmd("search_panels", query=query, region=region, cursor=trunc["next_cursor"])
                 )
             nexts.extend(after_search_panels(payload.get("panels", [])))
-            payload["_meta"] = {"next_commands": nexts[:5]}
+            _merge_panel_meta(payload, service, nexts[:5])
             return payload
 
         return await run_mcp_tool(
@@ -152,10 +166,9 @@ def register_panel_tools(mcp: FastMCP) -> None:
         response_mode: _MODE = "compact",
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
-            payload = await get_panelapp_service().get_panel(
-                panel_id, region, response_mode=response_mode
-            )
-            payload["_meta"] = {"next_commands": after_get_panel(region, panel_id)}
+            service = get_panelapp_service()
+            payload = await service.get_panel(panel_id, region, response_mode=response_mode)
+            _merge_panel_meta(payload, service, after_get_panel(region, panel_id))
             return payload
 
         return await run_mcp_tool(
