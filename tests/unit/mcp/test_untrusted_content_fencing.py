@@ -122,7 +122,11 @@ async def hostile_mcp():  # type: ignore[no-untyped-def]
     router.get(f"{_UK}/panels/1207/").mock(
         return_value=httpx.Response(200, json=_hostile_panel_detail())
     )
-    router.get(f"{_UK}/panels/signedoff/").mock(return_value=httpx.Response(200, json=empty_page))
+    for base in (_UK, _AU):
+        router.get(f"{base}/panels/").mock(return_value=httpx.Response(200, json=empty_page))
+        router.get(f"{base}/panels/signedoff/").mock(
+            return_value=httpx.Response(200, json=empty_page)
+        )
     transport = httpx.MockTransport(router.async_handler)
     async with httpx.AsyncClient(transport=transport) as http_client:
         client = PanelAppRestClient(_cfg(), client=http_client)

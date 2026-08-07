@@ -100,6 +100,26 @@ _UPSTREAM = {
     },
 }
 
+_REFRESH = {
+    "type": "object",
+    "description": "Panel-list generation freshness and background refresh state.",
+    "properties": {
+        "enabled": _BOOL,
+        "interval_seconds": _INT,
+        "last_attempt_at": {"type": ["string", "null"]},
+        "last_successful_refresh_at": {"type": ["string", "null"]},
+        "age_seconds": {"type": ["number", "null"]},
+        "consecutive_failures": _INT,
+        "failures_total": _INT,
+        "status": {
+            "type": "string",
+            "enum": ["disabled", "initializing", "healthy", "degraded", "stale"],
+        },
+        "last_error_type": {"type": ["string", "null"]},
+    },
+    "additionalProperties": True,
+}
+
 _META = {
     "type": "object",
     "description": "Per-call envelope metadata.",
@@ -118,6 +138,7 @@ _META = {
         "cache": {"type": "string", "enum": ["hit", "miss", "coalesced", "partial"]},
         "upstream_ms": {"type": "number"},
         "upstream": _UPSTREAM,
+        "data_freshness": _REFRESH,
     },
     "additionalProperties": True,
 }
@@ -203,6 +224,7 @@ _DIAGNOSTICS_DATA: dict[str, Any] = {
         "sources": _OBJ,
         "cache_ttl_seconds": _INT,
         "cache": _OBJ,
+        "refresh": _REFRESH,
         "metrics": {
             "type": "object",
             "description": "Process-wide RED aggregates (also at GET /metrics).",
@@ -225,5 +247,4 @@ DIAGNOSTICS_SCHEMA = tool_output_schema(
     server_version=_STR,
     capabilities_version=_STR,
     data=_DIAGNOSTICS_DATA,
-    refresh=_OBJ,
 )

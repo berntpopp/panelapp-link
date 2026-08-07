@@ -84,3 +84,63 @@ def test_get_metrics_is_singleton_and_resettable() -> None:
     assert get_metrics().snapshot()["requests_total"] == 1
     reset_metrics()
     assert get_metrics().snapshot()["requests_total"] == 0
+
+
+def test_refresh_metrics_snapshot_tracks_bounded_values() -> None:
+    reg = MetricsRegistry()
+    reg.record_refresh(
+        failures_total=7,
+        consecutive_failures=2,
+        age_seconds=123.5,
+        status="degraded",
+    )
+
+    assert reg.snapshot()["refresh"] == {
+        "failures_total": 7,
+        "consecutive_failures": 2,
+        "age_seconds": 123.5,
+        "status": "degraded",
+    }
+
+
+def test_prometheus_refresh_metrics_have_one_active_bounded_status() -> None:
+    reg = MetricsRegistry()
+    reg.record_refresh(
+        failures_total=3,
+        consecutive_failures=3,
+        age_seconds=600.0,
+        status="stale",
+    )
+    text = reg.render_prometheus()
+
+    assert "panelapp_refresh_failures_total 3" in text
+    assert "panelapp_refresh_consecutive_failures 3" in text
+    assert "panelapp_refresh_age_seconds 600.0" in text
+    statuses = {
+        line.split('status="', 1)[1].split('"', 1)[0]: int(line.rsplit(" ", 1)[1])
+        for line in text.splitlines()
+        if line.startswith("panelapp_refresh_status{")
+    }
+    assert statuses == {
+        "disabled": 0,
+        "initializing": 0,
+        "healthy": 0,
+        "degraded": 0,
+        "stale": 1,
+    }
+    assert "DownloadError" not in text
+
+
+def test_refresh_status_rejects_unbounded_label() -> None:
+    reg = MetricsRegistry()
+    try:
+        reg.record_refresh(
+            failures_total=1,
+            consecutive_failures=1,
+            age_seconds=None,
+            status="DownloadError",
+        )
+    except ValueError as exc:
+        assert "status" in str(exc)
+    else:
+        raise AssertionError("unbounded refresh status was accepted")

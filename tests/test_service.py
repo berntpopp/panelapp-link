@@ -97,6 +97,19 @@ async def test_get_panel_signed_off_annotation(live_service: PanelAppService) ->
     assert "signed_off_version" in out["panel"]
 
 
+async def test_mutating_get_panel_response_cannot_mutate_cached_detail(
+    live_service: PanelAppService,
+) -> None:
+    first = await live_service.get_panel(panel_id=285, region="uk", response_mode="compact")
+    original = list(first["panel"]["relevant_disorders"])
+    assert original
+    first["panel"]["relevant_disorders"].append("caller mutation")
+
+    second = await live_service.get_panel(panel_id=285, region="uk", response_mode="compact")
+
+    assert second["panel"]["relevant_disorders"] == original
+
+
 async def test_get_panel_both_region_rejected(live_service: PanelAppService) -> None:
     with pytest.raises(InvalidInputError) as exc:
         await live_service.get_panel(panel_id=285, region="both")
@@ -301,6 +314,18 @@ async def test_diagnostics(live_service: PanelAppService) -> None:
     assert diag["mode"] == "live"
     assert diag["sources"]["uk"]
     assert "cache" in diag
+    assert diag["refresh"] == live_service.refresh_snapshot()
+    assert set(diag["refresh"]) == {
+        "enabled",
+        "interval_seconds",
+        "last_attempt_at",
+        "last_successful_refresh_at",
+        "age_seconds",
+        "consecutive_failures",
+        "failures_total",
+        "status",
+        "last_error_type",
+    }
 
 
 # --- caching ----------------------------------------------------------------
@@ -370,14 +395,15 @@ async def test_search_panels_ranks_results_by_relevance(live_service: PanelAppSe
 
 
 async def test_prewarm_populates_cache(live_service: PanelAppService) -> None:
-    # Cold cache: nothing stored yet.
+    # Panel lists publish as one generation; RequestCache remains for details/genes.
     assert live_service._cache.stats()["entries"] == 0
     await live_service.prewarm()
-    # Prewarm fetched the heavy panel + signed-off lists for both regions.
-    warmed = live_service._cache.stats()["entries"]
-    assert warmed > 0
+    assert live_service._generation is not None
+    assert set(live_service._generation.panels) == {"uk", "australia"}
+    assert set(live_service._generation.signed_off) == {"uk", "australia"}
+    assert live_service._cache.stats()["entries"] == 0
     # A subsequent search is served entirely from the prewarmed cache -- no new
     # upstream fetches, so the cache-entry count does not grow.
     out = await live_service.search_panels(query="acute", region="uk")
     assert out["total"] >= 1
-    assert live_service._cache.stats()["entries"] == warmed
+    assert live_service._cache.stats()["entries"] == 0

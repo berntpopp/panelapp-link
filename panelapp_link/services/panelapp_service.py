@@ -1,28 +1,17 @@
-"""PanelApp service: live business logic over the PanelApp REST APIs.
+"""Live PanelApp business logic with atomic panel-list generations.
 
-Tools call this layer (never the REST client directly). All public methods are
-``async`` and return plain, JSON-ready dicts -- the data *payload* only. The MCP
-tool wrapper adds the ``_meta`` block, ``next_commands``, and the success/error
-envelope.
-
-There is no local database: each query calls the live PanelApp API (1-2 calls)
-and memoizes the raw payloads in a small in-memory TTL cache so repeated/related
-queries within the TTL window do not re-hit the upstream. The full panel list per
-region is cheap (summaries only) and is filtered in memory because PanelApp has
-no usable server-side panel search.
-
-Region handling is centralized here: ``region="both"`` fans out to
-``["uk", "australia"]`` and results are merged (deduped by ``(region, panel_id)``
-for panels). ``min_confidence`` (a traffic-light label) maps to a numeric rank
-floor via :data:`panelapp_link.constants.CONFIDENCE_RANK`. Cursor paging uses an
-opaque base64(JSON ``{"offset": N}``) token, mirroring the fleet contract.
+Public methods return JSON-ready payloads; the MCP layer adds envelopes and
+metadata. Detail and gene requests retain the bounded in-memory request cache.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
+import time
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from panelapp_link.config import get_data_config
@@ -33,19 +22,18 @@ from panelapp_link.exceptions import (
 )
 from panelapp_link.mcp.untrusted_content import UntrustedText, enforce_untrusted_text_limits
 from panelapp_link.models.enums import ENTITY_TYPES, RESPONSE_MODES, ResponseMode
+from panelapp_link.observability import telemetry, tracing
 from panelapp_link.observability.metrics import get_metrics
 from panelapp_link.services import _live_helpers as helpers
 from panelapp_link.services import shaping
 from panelapp_link.services.cache import RequestCache
+from panelapp_link.services.refresh_state import PanelListGeneration, RefreshState
 
 if TYPE_CHECKING:
     from panelapp_link.api.client import PanelAppRestClient
     from panelapp_link.config import PanelAppDataConfigModel
 
-logger = logging.getLogger(__name__)
-
 _MAX_LIMIT = 500
-
 # List/search tools fence several objects per record (panel description + each
 # type description; entity phenotypes + evidence) across up to _MAX_LIMIT
 # records, so they pass a generous ceiling legitimate data never hits.
@@ -80,6 +68,13 @@ class PanelAppService:
         self._cache_ttl = cache_ttl
         self._refresh_interval = self._config.refresh_interval
         self._refresh_task: asyncio.Task[None] | None = None
+        self._generation: PanelListGeneration | None = None
+        self._generation_lock = asyncio.Lock()
+        self._generation_error: Exception | None = None
+        self._refresh_state = RefreshState(
+            interval_seconds=self._refresh_interval,
+            cache_ttl_seconds=cache_ttl,
+        )
         self._base_by_region: dict[str, str] = {
             "uk": self._config.uk_api_url,
             "australia": self._config.au_api_url,
@@ -89,11 +84,7 @@ class PanelAppService:
 
     @staticmethod
     def _normalize_region(region: str) -> list[str]:
-        """Map a ``region`` argument to region keys.
-
-        ``"both"`` -> ``["uk", "australia"]``; ``"uk"``/``"australia"`` ->
-        single-element lists. Anything else raises ``InvalidInputError``.
-        """
+        """Map the public region argument to concrete region keys."""
         keys = _REGION_MAP.get(region)
         if keys is None:
             raise InvalidInputError(
@@ -146,35 +137,91 @@ class PanelAppService:
             "hint": _TRUNCATION_HINT,
         }
 
-    # --- cached live fetches -------------------------------------------
+    # --- atomic panel-list generation ----------------------------------
 
-    async def _panel_list(self, region_key: str) -> list[dict[str, Any]]:
-        """Return (cached, single-flight) the full panel-summary list for a region."""
-        base = self._base_by_region[region_key]
-        return await self._cache.get_or_fetch(  # type: ignore[no-any-return]
-            f"panels:{region_key}",
-            region_key,
-            "panels",
-            lambda: self._client.list_panels(base),
+    async def _fetch_generation_leg(
+        self, region: str, endpoint: str, fetch: Callable[[], Awaitable[Any]]
+    ) -> Any:
+        start = time.perf_counter()
+        with tracing.upstream_span(region, endpoint, telemetry.current_request_id()):
+            value = await fetch()
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+        telemetry.record_upstream(region, endpoint, elapsed_ms)
+        get_metrics().record_upstream(region, elapsed_ms)
+        return value
+
+    async def _fetch_generation(self) -> PanelListGeneration:
+        """Fetch all four list legs into one unpublished generation."""
+        uk = self._base_by_region["uk"]
+        au = self._base_by_region["australia"]
+        uk_panels, uk_signed, au_panels, au_signed = await asyncio.gather(
+            self._fetch_generation_leg("uk", "panels", lambda: self._client.list_panels(uk)),
+            self._fetch_generation_leg("uk", "signedoff", lambda: self._client.list_signed_off(uk)),
+            self._fetch_generation_leg("australia", "panels", lambda: self._client.list_panels(au)),
+            self._fetch_generation_leg(
+                "australia", "signedoff", lambda: self._client.list_signed_off(au)
+            ),
         )
 
-    async def _signed_off_map(self, region_key: str) -> dict[int, dict[str, Any]]:
-        """Return (cached, single-flight) ``{panel_id: {version, signed_off}}`` for a region."""
-        base = self._base_by_region[region_key]
+        def signed_map(rows: list[dict[str, Any]]) -> MappingProxyType[int, dict[str, Any]]:
+            return MappingProxyType(
+                {
+                    int(row["id"]): {
+                        "version": row.get("version"),
+                        "signed_off": row.get("signed_off"),
+                    }
+                    for row in rows
+                    if row.get("id") is not None
+                }
+            )
 
-        async def fetch() -> dict[int, dict[str, Any]]:
-            rows = await self._client.list_signed_off(base)
-            out: dict[int, dict[str, Any]] = {}
-            for row in rows:
-                pid = row.get("id")
-                if pid is None:
-                    continue
-                out[int(pid)] = {"version": row.get("version"), "signed_off": row.get("signed_off")}
-            return out
-
-        return await self._cache.get_or_fetch(  # type: ignore[no-any-return]
-            f"signedoff:{region_key}", region_key, "signedoff", fetch
+        created_monotonic = time.monotonic()
+        return PanelListGeneration(
+            panels=MappingProxyType({"uk": tuple(uk_panels), "australia": tuple(au_panels)}),
+            signed_off=MappingProxyType(
+                {"uk": signed_map(uk_signed), "australia": signed_map(au_signed)}
+            ),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            created_monotonic=created_monotonic,
+            expires_monotonic=created_monotonic + self._cache_ttl,
         )
+
+    async def _ensure_generation(self, *, force: bool = False) -> PanelListGeneration:
+        """Return a current generation, single-flighting acquisition/publication."""
+        observed = self._generation
+        if not force and observed is not None and time.monotonic() < observed.expires_monotonic:
+            telemetry.record_cache_hit()
+            get_metrics().record_cache("hit")
+            return observed
+        waited = self._generation_lock.locked()
+        if waited:
+            telemetry.record_coalesced()
+            get_metrics().record_cache("coalesced")
+        async with self._generation_lock:
+            current = self._generation
+            if current is not None and (
+                (not force and time.monotonic() < current.expires_monotonic)
+                or (force and current is not observed)
+            ):
+                return current
+            if waited and self._generation_error is not None:
+                raise self._generation_error
+            self._generation_error = None
+            self._refresh_state.record_attempt()
+            try:
+                generation = await self._fetch_generation()
+            except Exception as exc:
+                self._generation_error = exc
+                self._refresh_state.record_failure(exc)
+                raise
+            self._generation = generation
+            self._generation_error = None
+            self._refresh_state.record_success()
+            telemetry.record_cache_miss()
+            get_metrics().record_cache("miss")
+            return generation
+
+    # --- cached detail/gene fetches ------------------------------------
 
     async def _panel_detail(self, region_key: str, panel_id: int) -> dict[str, Any]:
         """Return (cached, single-flight) the full panel detail, mapping 404 -> NotFound."""
@@ -216,17 +263,7 @@ class PanelAppService:
         offset: int = 0,
         cursor: str | None = None,
     ) -> dict[str, Any]:
-        """Search panels by name/disorders/disease group, merged across regions.
-
-        Fetches the (cached) full panel list per region and filters it in memory
-        by per-token word-prefix match over name + relevant_disorders +
-        disease_group + disease_sub_group (so ``renal`` excludes ``adrenal``; an
-        empty query returns all). Results are ranked by relevance (name >
-        disorders > disease group, then name/region); an empty query preserves
-        alphabetical order. Returns ``{"query","count","total","panels":[...],
-        "truncated"?}``. Panels are deduped by ``(region, panel_id)``; paging is
-        over the deduped set.
-        """
+        """Search one captured panel-list generation across selected regions."""
         if cursor is not None:
             offset = helpers.decode_cursor(cursor)
         mode = self._validate_mode(response_mode)
@@ -236,11 +273,12 @@ class PanelAppService:
         q = (query or "").strip()
         needle = q.lower()
 
+        generation = await self._ensure_generation()
         seen: set[tuple[str, int]] = set()
         normalized: list[dict[str, Any]] = []
         for region_key in regions:
-            panels = await self._panel_list(region_key)
-            signed = await self._signed_off_map(region_key)
+            panels = generation.panels[region_key]
+            signed = generation.signed_off[region_key]
             for panel in panels:
                 pid = panel.get("id")
                 if pid is None:
@@ -267,9 +305,7 @@ class PanelAppService:
         # Panels fence description + each type description; list-tool ceiling.
         enforce_untrusted_text_limits(fenced, max_objects=_LIST_TOOL_MAX_FENCED_OBJECTS)
         trunc = self._truncation(total, limit, offset, len(page))
-        # has_more is the boolean partial-page flag (truncated is the rich block);
-        # a partial page MUST declare it so a client never reads the page as the whole
-        # result set (Response-Envelope pagination honesty).
+        # A partial page must declare has_more (Response-Envelope pagination honesty).
         payload["has_more"] = trunc is not None
         if trunc:
             payload["truncated"] = trunc
@@ -283,11 +319,7 @@ class PanelAppService:
         region: str,
         response_mode: str = "compact",
     ) -> dict[str, Any]:
-        """Return one panel's detail (+ entity count breakdown).
-
-        ``region`` must be ``"uk"`` or ``"australia"`` (panel ids are per-region;
-        ``"both"`` is rejected). Raises ``NotFoundError`` when absent.
-        """
+        """Return one panel detail, annotated from one captured generation."""
         mode = self._validate_mode(response_mode)
         if region == "both":
             raise InvalidInputError(
@@ -297,8 +329,9 @@ class PanelAppService:
             )
         helpers.validate_panel_id(panel_id)
         region_key = self._normalize_region(region)[0]
+        generation = await self._ensure_generation()
         detail = await self._panel_detail(region_key, panel_id)
-        signed = await self._signed_off_map(region_key)
+        signed = generation.signed_off[region_key]
         row = shaping.normalize_panel(detail, region_key, signed.get(panel_id))
         fenced: list[UntrustedText] = []
         panel = shaping.shape_panel(row, mode, fenced)
@@ -317,11 +350,7 @@ class PanelAppService:
         offset: int = 0,
         cursor: str | None = None,
     ) -> dict[str, Any]:
-        """Return a panel's entities, filtered by type and minimum confidence.
-
-        Returns ``{"panel_id","region","entity_type","count","total",
-        "entities":[...],"truncated"?}``.
-        """
+        """Return a panel's entities, filtered by type and confidence."""
         if cursor is not None:
             offset = helpers.decode_cursor(cursor)
         mode = self._validate_mode(response_mode)
@@ -375,14 +404,7 @@ class PanelAppService:
         min_confidence: str | None = None,
         response_mode: str = "compact",
     ) -> dict[str, Any]:
-        """Return the panels a gene appears on, across regions, sorted by confidence.
-
-        PanelApp is queried by ``entity_name`` (gene symbol). A bare ``hgnc_id``
-        cannot drive the query, so ``gene_symbol`` is required; ``hgnc_id`` (when
-        supplied alongside) filters the hits. Returns ``{"gene","count","panels"}``
-        where ``panels`` are shaped gene->panel hit rows ordered by confidence
-        rank (desc) then region. Raises ``NotFoundError`` when the gene is absent.
-        """
+        """Return a gene's panels across regions, sorted by confidence."""
         self._validate_mode(response_mode)
         regions = self._normalize_region(region)
         min_rank = helpers.min_rank(min_confidence)
@@ -400,10 +422,7 @@ class PanelAppService:
                 raise InvalidInputError(
                     "hgnc_id must be an HGNC CURIE like HGNC:1100.", field="hgnc_id"
                 )
-            # Canonicalise case so the match below is case-insensitive: validation
-            # accepts hgnc:13666 but PanelApp stores HGNC:13666, and a case-sensitive
-            # compare would otherwise 404 a well-formed id (a CURIE is HGNC:<digits>,
-            # so upper() only touches the prefix).
+            # PanelApp stores an uppercase HGNC prefix.
             hid = hid.upper()
 
         results = await self._gather_gene_results(regions, symbol)
@@ -411,10 +430,7 @@ class PanelAppService:
             raise NotFoundError(
                 f"No PanelApp gene found for {symbol!r}. Try resolve_gene to confirm a symbol."
             )
-        # A well-formed hgnc_id that matches no resolved entity is a caller mismatch,
-        # not an empty result: fail loudly instead of silently zeroing the hits (the
-        # silent-empty filter forbidden by Response-Envelope v1.1). min_confidence may
-        # still legitimately empty the hits below -- that filter is over a DECLARED enum.
+        # Fail loudly on an HGNC mismatch; confidence filtering may still be empty.
         if hid is not None and not any(
             (result.get("gene_data") or {}).get("hgnc_id") == hid for _rk, result in results
         ):
@@ -508,40 +524,13 @@ class PanelAppService:
     # --- warm-up / background refresh -----------------------------------
 
     async def prewarm(self) -> None:
-        """Pre-fetch the heavy list endpoints for both regions (best-effort).
-
-        Populates the panel-summary + signed-off lists so the first
-        ``search_panels`` never pays the cold double-fetch. Errors are swallowed
-        (logged) so a transient upstream failure never blocks startup.
-        """
-        try:
-            await asyncio.gather(
-                *(self._panel_list(r) for r in _REGION_MAP["both"]),
-                *(self._signed_off_map(r) for r in _REGION_MAP["both"]),
-            )
-        except Exception as exc:  # best-effort warm-up; never fatal
-            # Log only the exception TYPE -- never str(exc), which can carry
-            # request/upstream detail (M3 no-raw-detail-in-logs invariant).
-            logger.warning("panelapp prewarm failed: %s", exc.__class__.__name__)
+        """Best-effort acquisition of one complete generation for startup."""
+        with contextlib.suppress(Exception):  # refresh state logs the safe error type
+            await self._ensure_generation()
 
     async def refresh_panel_lists(self) -> None:
-        """Force-refresh the panel + signed-off lists for both regions.
-
-        Overwrites the cached lists (stale-while-revalidate) so a long-lived
-        process keeps ``search_panels`` warm past the TTL without an on-path miss.
-        """
-        for region_key in _REGION_MAP["both"]:
-            base = self._base_by_region[region_key]
-            rows = await self._client.list_panels(base)
-            self._cache.put(f"panels:{region_key}", rows)
-            signed = await self._client.list_signed_off(base)
-            out: dict[int, dict[str, Any]] = {}
-            for row in signed:
-                pid = row.get("id")
-                if pid is None:
-                    continue
-                out[int(pid)] = {"version": row.get("version"), "signed_off": row.get("signed_off")}
-            self._cache.put(f"signedoff:{region_key}", out)
+        """Force-fetch and atomically publish one complete generation."""
+        await self._ensure_generation(force=True)
 
     async def start_background_refresh(self) -> asyncio.Task[None] | None:
         """Start the periodic list-refresh loop if ``refresh_interval`` > 0."""
@@ -555,11 +544,8 @@ class PanelAppService:
         """Sleep ``interval`` seconds, then refresh the lists; repeat until cancelled."""
         while True:  # pragma: no cover - timing loop exercised via refresh_panel_lists
             await asyncio.sleep(interval)
-            try:
+            with contextlib.suppress(Exception):  # state already logged the safe error type
                 await self.refresh_panel_lists()
-            except Exception as exc:
-                # Log only the exception TYPE (M3 no-raw-detail-in-logs invariant).
-                logger.warning("panelapp background refresh failed: %s", exc.__class__.__name__)
 
     async def aclose(self) -> None:
         """Cancel the background refresh task, if any."""
@@ -583,8 +569,20 @@ class PanelAppService:
             "cache_ttl_seconds": self._cache_ttl,
         }
 
+    def refresh_snapshot(self) -> dict[str, object]:
+        """Return the caller-visible refresh snapshot."""
+        snapshot = self._refresh_state.snapshot()
+        get_metrics().record_refresh(
+            failures_total=snapshot.failures_total,
+            consecutive_failures=snapshot.consecutive_failures,
+            age_seconds=snapshot.age_seconds,
+            status=snapshot.status,
+        )
+        return snapshot.to_dict()
+
     def diagnostics(self) -> dict[str, Any]:
         """Return live source/config + cache stats + the RED metrics snapshot."""
+        refresh = self.refresh_snapshot()
         return {
             "mode": "live",
             "sources": {
@@ -594,4 +592,5 @@ class PanelAppService:
             "cache_ttl_seconds": self._cache_ttl,
             "cache": self._cache.stats(),
             "metrics": get_metrics().snapshot(),
+            "refresh": refresh,
         }

@@ -100,3 +100,31 @@ async def test_validation_error_envelope_records_metric() -> None:
         validation_error_envelope(tool_name="search_panels", arguments={}, exc=exc)
     snap = get_metrics().snapshot()
     assert snap["errors_by_code"]["invalid_input"] == 1
+
+
+def test_panel_tool_metadata_merges_freshness_and_next_commands() -> None:
+    from panelapp_link.mcp.tools.panels import _merge_panel_meta
+
+    class Service:
+        @staticmethod
+        def refresh_snapshot() -> dict[str, Any]:
+            return {"status": "degraded", "consecutive_failures": 1}
+
+    payload: dict[str, Any] = {"_meta": {"existing": "kept"}}
+    next_commands = [{"tool": "get_panel", "arguments": {"panel_id": 1}}]
+    _merge_panel_meta(payload, Service(), next_commands)  # type: ignore[arg-type]
+
+    assert payload["_meta"] == {
+        "existing": "kept",
+        "data_freshness": {"status": "degraded", "consecutive_failures": 1},
+        "next_commands": next_commands,
+    }
+
+
+def test_refresh_metadata_is_declared_at_runtime_locations() -> None:
+    from panelapp_link.mcp.schemas import _META, DIAGNOSTICS_SCHEMA
+
+    assert "data_freshness" in _META["properties"]
+    diagnostics_data = DIAGNOSTICS_SCHEMA["properties"]["data"]
+    assert "refresh" in diagnostics_data["properties"]
+    assert "refresh" not in DIAGNOSTICS_SCHEMA["properties"]

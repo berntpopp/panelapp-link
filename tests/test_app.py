@@ -83,6 +83,33 @@ def test_health_endpoint_reports_live_status() -> None:
     # The live backend reports its mode + sources without any network call.
     assert body["data"]["mode"] == "live"
     assert "uk" in body["data"]["sources"]
+    assert body["data"]["refresh"]["status"] == "disabled"
+    assert body["status"] == "ok"
+
+
+def test_health_remains_live_when_refresh_is_degraded_or_stale() -> None:
+    from panelapp_link.mcp.service_adapters import set_service_for_testing
+
+    class StubService:
+        def __init__(self, status: str) -> None:
+            self.status = status
+
+        @staticmethod
+        def capabilities_data() -> dict[str, object]:
+            return {"mode": "live", "sources": {}, "cache_ttl_seconds": 600}
+
+        def refresh_snapshot(self) -> dict[str, object]:
+            return {"status": self.status, "consecutive_failures": 3}
+
+    try:
+        for status in ("degraded", "stale"):
+            set_service_for_testing(StubService(status))  # type: ignore[arg-type]
+            response = TestClient(create_app()).get("/health")
+            assert response.status_code == 200
+            assert response.json()["status"] == "ok"
+            assert response.json()["data"]["refresh"]["status"] == status
+    finally:
+        set_service_for_testing(None)
 
 
 def test_app_has_metrics_route() -> None:

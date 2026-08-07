@@ -57,6 +57,7 @@ async def test_search_panels_success(mcp_client: Client) -> None:
     assert {"query", "count", "total", "panels"} <= set(data)
     assert isinstance(data["panels"], list)
     assert "next_commands" in data["_meta"]
+    assert data["_meta"]["data_freshness"]["status"] == "disabled"
 
 
 async def test_search_panels_region_both_merges_uk_and_au(mcp_client: Client) -> None:
@@ -75,6 +76,7 @@ async def test_get_panel_success(mcp_client: Client) -> None:
     assert data["panel"]["panel_id"] == 285
     assert data["panel"]["region"] == "uk"
     assert data["_meta"]["next_commands"][0]["tool"] == "get_panel_genes"
+    assert data["_meta"]["data_freshness"]["status"] == "disabled"
 
 
 async def test_get_panel_genes_success(mcp_client: Client) -> None:
