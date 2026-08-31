@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     curl \
@@ -42,7 +42,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PANELAPP_LINK_MCP_PATH=/mcp \
     TMPDIR=/tmp/panelapp-link
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/* \
@@ -63,7 +63,18 @@ COPY --chown=app:app ./docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN /opt/venv/bin/pip install . --no-deps && chmod +x /usr/local/bin/entrypoint.sh
 
-RUN rm -rf /root/.cache/pip /usr/local/lib/python*/ensurepip \
+RUN rm -rf /root/.cache/pip \
+    /usr/local/lib/python*/ensurepip \
+    /usr/local/lib/python*/site-packages/pip \
+    /usr/local/lib/python*/site-packages/pip-*.dist-info \
+    /usr/local/lib/python*/site-packages/setuptools \
+    /usr/local/lib/python*/site-packages/setuptools-*.dist-info \
+    /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14 \
+    /opt/venv/lib/python*/site-packages/pip \
+    /opt/venv/lib/python*/site-packages/pip-*.dist-info \
+    /opt/venv/lib/python*/site-packages/setuptools \
+    /opt/venv/lib/python*/site-packages/setuptools-*.dist-info \
+    /opt/venv/bin/pip /opt/venv/bin/pip3 /opt/venv/bin/pip3.14 \
     && find / -xdev -type d -name __pycache__ -prune -exec rm -rf '{}' + \
     && find / -xdev -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 RUN find / -xdev -perm /6000 -exec chmod a-s '{}' + \
