@@ -49,6 +49,11 @@ services:
       # Stateless live-API client: ready to serve almost immediately.
       start_period: 30s
     restart: unless-stopped
+    # GeneFoundry deploy contract: the fleet controller (strato_v6_docker_npm,
+    # scripts/utils/deployment_preflight.py) accepts a declared user only as numeric
+    # non-root, and its runtime observer proves the effective uid from /proc.
+    # This is THIS image's own uid:gid (docker/Dockerfile) -- sibling -link images differ.
+    user: "999:999"
     read_only: true
     tmpfs:
       # TMPDIR=/tmp/panelapp-link (set in the image) - scratch space.
