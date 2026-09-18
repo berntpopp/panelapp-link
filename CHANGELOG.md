@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-09-18
+
+### Changed
+
+- Dependabot and security maintenance sweep: bump `gunicorn` (>=26.2.0), `pydantic` (>=2.13.5), `typer` (>=0.27.2), `orjson` (>=3.12.0), `ruff` (>=0.16.8), and `mypy` (>=2.3.1).
+- Workflow maintenance: update reusable workflows to `genefoundry-router` v0.9.1, `setup-uv` to v10.1.0, and `codeql-action` to v4.38.0.
+- Dependabot configuration: enable grouped dependency updates for python and github-actions ecosystems.
+
 ## [0.7.3] - 2026-09-02
 
 ### Changed
