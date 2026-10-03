@@ -1,5 +1,9 @@
 # Changelog
 
+## [{v}] - 2026-10-03
+
+- Update FastAPI, pytest-mock, and the OpenTelemetry API/exporter packages.
+
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
