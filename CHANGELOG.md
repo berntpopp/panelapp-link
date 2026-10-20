@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.7] - 2026-10-20
+
+### Security
+
+- Fix Dependabot alert on `mcp` by raising the floor to `mcp[cli]>=1.30.0` (locked at 1.30.0; fixed in 1.30.0).
+
+### Changed
+
+- Dependency sweep: bump `mcp` to 1.30.0, `pydantic` to 2.14.1, `pydantic-core` to 2.50.1, `pydantic-settings` to 2.16.1, `ruff` to 0.17.1, `ast-serialize` to 0.13.1, and the OpenTelemetry packages to 1.45.1 / 0.66b1, plus `orjson`, `typer`, `typing-inspection`, `pre-commit`, `librt`, `mypy` and `fastapi` (lock refresh).
+- GitHub Actions: `setup-uv` to v10.3.0, `upload-artifact` to v7.0.2, `codeql-action` to v4.38.3; reusable container workflows pinned to genefoundry-router v0.10.4.
+
 ## [0.7.6] - 2026-10-03
 
 - Update FastAPI, pytest-mock, and the OpenTelemetry API/exporter packages.
