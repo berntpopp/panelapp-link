@@ -71,7 +71,7 @@ Useful focused commands:
 - Use `uv` for dependency management; do not use direct `pip` installs.
 - Use modern Python typing: `list[str]`, `dict[str, int]`, `str | None`.
 - Format and lint Python with Ruff (100-char line length).
-- Type check with mypy targeting Python 3.12 (strict mode).
+- Type check with mypy targeting Python 3.14 (strict mode).
 - Cover the service and helpers with unit tests; use `respx` to mock the live
   PanelApp APIs (committed fixtures under `tests/fixtures/`). Tests must never hit
   the network except under the `integration` marker.

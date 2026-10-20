@@ -130,7 +130,7 @@ class PanelAppRestClient:
                         return json.loads(body)  # type: ignore[no-any-return]
             except httpx.TooManyRedirects:
                 raise DisallowedURLError(HTTP_POLICY_ERROR) from None
-            except (httpx.TimeoutException, httpx.TransportError):
+            except httpx.TimeoutException, httpx.TransportError:
                 last_exc = DownloadError("PanelApp request failed (network error).")
                 last_status = None
             if attempt < self._config.max_retries:

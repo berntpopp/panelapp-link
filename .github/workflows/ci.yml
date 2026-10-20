@@ -22,17 +22,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.12 is the `requires-python` floor; 3.14 is the interpreter the
-        # container actually ships (docker/Dockerfile). Both ends are tested so a
-        # base-image bump can never ship an interpreter CI has not exercised.
-        python-version: ["3.12", "3.14"]
+        # Single supported interpreter, matching the container (docker/Dockerfile).
+        python-version: ["3.14"]
 
-    # The matrix only works today because this repo happens to have no
-    # `.python-version` file, leaving uv to follow PATH. Adding one would silently
-    # collapse both legs onto a single interpreter while CI still reported two —
-    # the exact blind spot the matrix exists to close. `UV_PYTHON` outranks
-    # `.python-version`, so each leg runs the interpreter it is named after by
-    # statement rather than by accident.
+    # UV_PYTHON pins the interpreter explicitly, so uv never falls back to PATH.
     env:
       UV_PYTHON: ${{ matrix.python-version }}
 

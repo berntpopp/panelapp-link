@@ -5,6 +5,9 @@ on:
     branches: [main]
 permissions:
   contents: read
+env:
+  UV_PYTHON: "3.14"
+
 concurrency:
   group: conformance-${{ github.ref }}
   cancel-in-progress: true

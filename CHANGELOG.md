@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Dependabot no longer proposes `mcp` major updates (fastmcp caps `mcp<2.0`).
+- Unify on Python 3.14 (requires-python, tooling, CI single-version matrix, router reusable workflows v0.10.5); cancel superseded PR runs; Dependabot no longer proposes Python minor jumps.
 
 ## [0.7.7] - 2026-10-20
 
