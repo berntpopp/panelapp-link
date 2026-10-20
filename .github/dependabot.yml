@@ -10,6 +10,10 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps"
+    ignore:
+      # fastmcp caps mcp<2.0; a 2.x proposal can never resolve and fails the weekly job.
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
     groups:
       python-dependencies:
         patterns:

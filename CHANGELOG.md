@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Dependabot no longer proposes `mcp` major updates (fastmcp caps `mcp<2.0`).
+
 ## [0.7.7] - 2026-10-20
 
 ### Security
