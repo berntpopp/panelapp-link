@@ -42,7 +42,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PANELAPP_LINK_MCP_PATH=/mcp \
     TMPDIR=/tmp/panelapp-link
 
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+RUN mkdir -p "$TMPDIR" && apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/* \
