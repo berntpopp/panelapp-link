@@ -46,6 +46,11 @@ _REFLECTION_MARKERS = (
     "Failed to validate request",
     "Failed to validate notification",
     "Message that failed validation",
+    # MCP SDK 2 runner: unknown method / dropped frame records echo caller input.
+    "dropped %r",
+    "dropped %s",
+    "dropped a frame",
+    "no handler for notification",
 )
 _SCRUBBED_MESSAGE = "MCP request detail omitted (caller input redacted)."
 
@@ -60,6 +65,7 @@ _SOURCE_LOGGERS = (
     "mcp",
     "mcp.server.lowlevel.server",
     "mcp.shared.session",
+    "mcp.server.runner",
 )
 
 

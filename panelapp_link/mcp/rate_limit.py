@@ -20,7 +20,7 @@ from collections.abc import Callable
 from typing import Any
 
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 
 from panelapp_link.mcp.envelope import rate_limited_envelope
 

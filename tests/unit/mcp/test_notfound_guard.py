@@ -36,7 +36,7 @@ import pytest
 from fastmcp import Client
 from mcp.shared.memory import create_client_server_memory_streams
 from mcp.shared.message import SessionMessage
-from mcp.types import JSONRPCMessage, JSONRPCNotification, JSONRPCRequest
+from mcp.types import JSONRPCNotification, JSONRPCRequest
 
 from panelapp_link.mcp.facade import create_panelapp_mcp
 from panelapp_link.mcp.service_adapters import reset_panelapp_service, set_service_for_testing
@@ -83,6 +83,7 @@ _SERVER_LOG_LOGGERS = (
     "mcp",
     "mcp.server.lowlevel.server",
     "mcp.shared.session",
+    "mcp.server.runner",
 )
 #: Client-side (caller/host) loggers -- excluded: a separate process in the fleet.
 _CLIENT_SIDE_LOGGERS = ("mcp.client", "fastmcp.client", "client")
@@ -172,18 +173,17 @@ async def _raw_request(method: str, params: dict[str, Any]) -> tuple[str, str]:
                         server_read,
                         server_write,
                         srv.create_initialization_options(),
-                        stateless=False,
                         raise_exceptions=False,
                     )
                 )
 
                 async def send(obj: Any) -> None:
-                    await client_write.send(SessionMessage(JSONRPCMessage(obj)))
+                    await client_write.send(SessionMessage(message=obj))
 
                 async def recv(req_id: int) -> str:
                     with anyio.move_on_after(3.0):
                         async for msg in client_read:
-                            root = msg.message.root if not isinstance(msg, Exception) else None
+                            root = msg.message if not isinstance(msg, Exception) else None
                             if root is not None and getattr(root, "id", None) == req_id:
                                 return str(root.model_dump_json())
                     return "<timeout>"
@@ -268,6 +268,7 @@ async def test_unknown_prompt_name_not_reflected_via_raw() -> None:
     response, logs = await _raw_request(
         "prompts/get", {"name": HOSTILE_PROMPT_NAME, "arguments": {}}
     )
+    assert json.loads(response)["error"]["code"] == -32602  # MCPError(INVALID_PARAMS)
     _assert_no_leak(response)
     _assert_no_leak(logs)
 
@@ -280,6 +281,7 @@ async def test_hostile_resource_uri_no_caller_or_log_leak_raw(uri: str) -> None:
     """A raw JSON-RPC ``resources/read`` with a hostile URI must not reflect it into
     the caller-visible JSON-RPC error or any server log record."""
     response, logs = await _raw_request("resources/read", {"uri": uri})
+    assert json.loads(response)["error"]["code"] == -32602  # MCPError(INVALID_PARAMS)
     _assert_no_leak(response)
     _assert_no_leak(logs)
 

@@ -201,7 +201,8 @@ async def test_unknown_resource_uri_is_not_echoed() -> None:
         with pytest.raises(Exception) as exc_info:
             await client.read_resource(hostile_uri)
     detail = str(exc_info.value)
-    assert detail == "Resource not found: The requested resource was not found."
+    # Layer 3 (resources/read backstop) raises the fixed message as MCPError(-32602).
+    assert detail == "The requested resource was not found."
     assert "delete_everything" not in detail
     assert "ignore_all_previous_instructions" not in detail
 

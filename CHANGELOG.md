@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-18
+
+### Changed
+
+- Upgrade FastMCP 3.4 → 4.2.2 and MCP SDK 1.x → 2.x; supports the 2026-07-28 sessionless protocol era alongside the legacy handshake.
+- Not-found reflection guard (Layer 3) ported to the SDK 2 request-handler API; `resources/read` is now wrapped too (FastMCP 4 echoes an unknown URI before Layer 2 runs). Prompt/resource backstop errors are `MCPError(-32602)` with fixed messages.
+
+### Security
+
+- Strip the caller-supplied method name SDK 2 echoes in METHOD_NOT_FOUND `data` (both protocol eras); scrub the new `mcp.server.runner` "dropped …" / "no handler for notification" log records.
+
 ## [0.7.12] - 2026-11-13
 
 ### Changed

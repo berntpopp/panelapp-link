@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from pydantic import BaseModel, ValidationError
 
 from panelapp_link.mcp.middleware import InputValidationMiddleware

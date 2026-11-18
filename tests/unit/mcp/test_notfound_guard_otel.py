@@ -29,7 +29,7 @@ import pytest
 from fastmcp import Client
 from mcp.shared.memory import create_client_server_memory_streams
 from mcp.shared.message import SessionMessage
-from mcp.types import JSONRPCMessage, JSONRPCNotification, JSONRPCRequest
+from mcp.types import JSONRPCNotification, JSONRPCRequest
 from opentelemetry import trace as otel_trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -130,18 +130,17 @@ async def _raw_request(method: str, params: dict[str, Any]) -> None:
                     server_read,
                     server_write,
                     srv.create_initialization_options(),
-                    stateless=False,
                     raise_exceptions=False,
                 )
             )
 
             async def send(obj: Any) -> None:
-                await client_write.send(SessionMessage(JSONRPCMessage(obj)))
+                await client_write.send(SessionMessage(message=obj))
 
             async def recv(req_id: int) -> None:
                 with anyio.move_on_after(3.0):
                     async for msg in client_read:
-                        root = msg.message.root if not isinstance(msg, Exception) else None
+                        root = msg.message if not isinstance(msg, Exception) else None
                         if root is not None and getattr(root, "id", None) == req_id:
                             return
                 return
@@ -180,8 +179,10 @@ async def test_recording_span_unknown_tool_is_redacted(
     async with Client(mcp) as client:
         await client.call_tool(HOSTILE_TOOL_NAME, {}, raise_on_error=False)
     _assert_no_leak(_span_blob(recording_exporter))
-    # The server never created a tools/call span for the unknown tool (preflight).
-    assert "tools/call" not in " ".join(_server_span_names(recording_exporter))
+    # The server never created a ``tools/call <name>`` span for the unknown tool
+    # (preflight). FastMCP 4 adds a name-free ``tools/call`` request seam span.
+    names = _server_span_names(recording_exporter)
+    assert not [n for n in names if n.startswith("tools/call ")], names
 
 
 async def test_recording_span_unknown_resource_is_redacted(
