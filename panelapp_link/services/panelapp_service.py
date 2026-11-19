@@ -405,7 +405,7 @@ class PanelAppService:
         response_mode: str = "compact",
     ) -> dict[str, Any]:
         """Return a gene's panels across regions, sorted by confidence."""
-        self._validate_mode(response_mode)
+        mode = self._validate_mode(response_mode)
         regions = self._normalize_region(region)
         min_rank = helpers.min_rank(min_confidence)
         symbol = (gene_symbol or "").strip()
@@ -445,28 +445,22 @@ class PanelAppService:
             if hid is not None and gene_data.get("hgnc_id") != hid:
                 continue
             panel = result.get("panel") or {}
-            level, label, rank = helpers.confidence(result.get("confidence_level"))
-            if min_rank is not None and (rank or 0) < min_rank:
+            pid = int(panel["id"]) if panel.get("id") is not None else None
+            hit = shaping.normalize_entity(result, region_key, pid, panel.get("name"))
+            if min_rank is not None and (hit["confidence_rank"] or 0) < min_rank:
                 continue
-            hits.append(
-                {
-                    "region": region_key,
-                    "panel_id": int(panel["id"]) if panel.get("id") is not None else None,
-                    "panel_name": panel.get("name"),
-                    "version": helpers.as_str(panel.get("version")),
-                    "confidence_label": label,
-                    "confidence_level": level,
-                    "confidence_rank": rank,
-                    "mode_of_inheritance": result.get("mode_of_inheritance"),
-                }
-            )
+            hit["version"] = helpers.as_str(panel.get("version"))
+            hits.append(hit)
 
         hits.sort(key=lambda h: (-(h.get("confidence_rank") or 0), h.get("region") or ""))
-        return {
+        fenced: list[UntrustedText] = []
+        payload = {
             "gene": helpers.gene_identity(symbol, results, hits),
             "count": len(hits),
-            "panels": [shaping.shape_gene_panel_hit(h) for h in hits],
+            "panels": [shaping.shape_gene_panel_hit(h, mode, fenced) for h in hits],
         }
+        enforce_untrusted_text_limits(fenced, max_objects=_LIST_TOOL_MAX_FENCED_OBJECTS)
+        return payload
 
     async def resolve_gene(
         self,
