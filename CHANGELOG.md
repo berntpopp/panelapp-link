@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-19
+
+### Fixed
+
+- `get_gene_panels` now honours its advertised `response_mode` (it returned identical payloads for every mode, failing the Behaviour Conformance probe, router #314): `minimal` keeps region/panel_id/panel_name/confidence_label; `compact` (default, unchanged); `standard` adds `penetrance` and fenced `phenotypes`; `full` also adds fenced `evidence`, `publications`, `omim`, `tags`. `get_panels_for_genes` inherits the same per-panel tiers.
+
 ## [0.8.0] - 2026-11-18
 
 ### Changed
