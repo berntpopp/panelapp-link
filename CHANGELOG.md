@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-19
+
+### Fixed
+
+- Argument errors are diagnosable from logs again (#126): schema-level errors log `mcp_arg_error tool=… field=… type=…` (pydantic error type) and service-level errors add `field=…` to `mcp_tool_error`. Field names are the already-redacted `field_errors` names (an unknown caller-chosen argument logs as `<unknown>`); rejected values are never logged.
+
 ## [0.9.0] - 2026-11-19
 
 ### Fixed

@@ -133,8 +133,14 @@ class InputValidationMiddleware(Middleware):
                 envelope = validation_error_envelope(
                     tool_name=tool_name, arguments=arguments, exc=cause
                 )
+                error_type = ",".join(str(e.get("type", "")) for e in cause.errors())
             else:
                 envelope = arg_validation_failure_envelope(tool_name=tool_name, arguments=arguments)
+                error_type = "invalid_arguments"
+            # Field NAMES (already redacted in field_errors) + pydantic type only, never
+            # the rejected value (#126). tool_name passed the registry preflight.
+            fields = ",".join(e["field"] for e in envelope.get("field_errors") or []) or "-"
+            logger.warning("mcp_arg_error tool=%s field=%s type=%s", tool_name, fields, error_type)
             return _error_tool_result(envelope)
         # A domain error envelope returned by the tool body arrives here as a
         # success-wrapped ToolResult; re-flag it with isError:true.

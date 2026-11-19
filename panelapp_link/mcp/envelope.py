@@ -453,9 +453,10 @@ async def run_mcp_tool(
             tracing.record_error(span, error_code)
             envelope["_meta"].update(telemetry.telemetry_meta(scope))
             logger.warning(
-                "mcp_tool_error tool=%s code=%s exc=%s",
+                "mcp_tool_error tool=%s code=%s exc=%s field=%s",
                 tool_name,
                 error_code,
                 exc.__class__.__name__,
+                ",".join(e["field"] for e in envelope.get("field_errors") or []) or "-",
             )
             return envelope
