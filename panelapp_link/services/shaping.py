@@ -130,8 +130,8 @@ def normalize_panel(
 def normalize_entity(
     live: dict[str, Any],
     region: str,
-    panel_id: int,
-    panel_name: str,
+    panel_id: int | None,
+    panel_name: str | None,
 ) -> dict[str, Any]:
     """Flatten a raw PanelApp entity (gene/region/str) into a shaper-ready dict.
 
@@ -419,21 +419,40 @@ def shape_entity(
     return out
 
 
-def shape_gene_panel_hit(row: dict[str, Any]) -> dict[str, Any]:
-    """Shape one panel a gene appears on (a gene->panel hit row).
+def shape_gene_panel_hit(
+    row: dict[str, Any],
+    mode: ResponseMode = "compact",
+    fenced: list[UntrustedText] | None = None,
+) -> dict[str, Any]:
+    """Shape one panel a gene appears on (a gene->panel hit row) for a response mode.
 
-    The internal ``confidence_rank`` ordering column is dropped; callers sort by
-    it before shaping.
+    minimal = region/panel_id/panel_name/confidence_label; compact adds version,
+    confidence_level, mode_of_inheritance; standard/full add the entity tiers of
+    :func:`shape_entity` (penetrance, phenotypes; full: evidence, publications,
+    omim, tags). The internal ``confidence_rank`` column is never surfaced.
     """
-    return {
+    out: dict[str, Any] = {
         "region": row.get("region"),
         "panel_id": row.get("panel_id"),
         "panel_name": row.get("panel_name"),
-        "version": row.get("version"),
         "confidence_label": row.get("confidence_label"),
-        "confidence_level": row.get("confidence_level"),
-        "mode_of_inheritance": row.get("mode_of_inheritance"),
     }
+    if mode == "minimal":
+        return out
+    out.update(
+        {
+            "version": row.get("version"),
+            "confidence_level": row.get("confidence_level"),
+            "mode_of_inheritance": row.get("mode_of_inheritance"),
+        }
+    )
+    if mode == "compact":
+        return out
+    entity = shape_entity(row, mode, fenced)
+    for key in ("penetrance", "phenotypes", "evidence", "publications", "omim", "tags"):
+        if key in entity:
+            out[key] = entity[key]
+    return out
 
 
 def shape_gene(row: dict[str, Any]) -> dict[str, Any]:

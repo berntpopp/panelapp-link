@@ -114,3 +114,17 @@ async def test_get_panels_for_genes_count_equals_panels_len_under_filter(
 
     gp = await service.get_gene_panels(gene_symbol="MIXED", region="uk", min_confidence="green")
     assert entry["panel_count"] == gp["count"]
+
+
+async def test_get_gene_panels_honours_response_mode(service: PanelAppService) -> None:
+    """Advertised response_mode must change the payload (behaviour probe, router #314)."""
+    modes = {
+        m: await service.get_gene_panels(gene_symbol="MIXED", region="uk", response_mode=m)
+        for m in ("minimal", "compact", "standard", "full")
+    }
+    assert len({repr(p["panels"]) for p in modes.values()}) == 4
+    assert all(p["count"] == 3 for p in modes.values())
+    assert "version" not in modes["minimal"]["panels"][0]
+    assert "phenotypes" in modes["standard"]["panels"][0]
+    assert "publications" in modes["full"]["panels"][0]
+    assert "publications" not in modes["standard"]["panels"][0]
