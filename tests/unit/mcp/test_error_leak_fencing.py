@@ -31,8 +31,13 @@ from fastmcp import Client
 
 from panelapp_link.api.client import PanelAppRestClient
 from panelapp_link.config import PanelAppDataConfigModel
-from panelapp_link.exceptions import DownloadError, NotFoundError, RateLimitError
-from panelapp_link.mcp.envelope import _safe_pydantic_field
+from panelapp_link.exceptions import (
+    DownloadError,
+    InvalidInputError,
+    NotFoundError,
+    RateLimitError,
+)
+from panelapp_link.mcp.envelope import _safe_pydantic_field, run_mcp_tool
 from panelapp_link.mcp.facade import create_panelapp_mcp
 from panelapp_link.mcp.service_adapters import reset_panelapp_service, set_service_for_testing
 from panelapp_link.mcp.untrusted_content import UntrustedTextLimitError
@@ -356,3 +361,46 @@ async def test_client_severs_url_from_error_and_does_not_log_it(
         assert "delete_everything" not in msg
         if record.name.split(".")[0] == "panelapp_link":
             assert "entity_name" not in msg
+
+
+async def test_arg_error_logs_field_name_and_type_never_value(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Issue #126: an argument error logs tool/field/type so it can be diagnosed --
+    the rejected value and a caller-chosen (unknown) argument name never reach the log.
+    """
+    set_service_for_testing(None)
+    hostile_arg = f"ev{HOSTILE_CP}il_delete_everything"
+    async with Client(create_panelapp_mcp()) as client:
+        with caplog.at_level("WARNING", logger="panelapp_link"):
+            await client.call_tool(
+                "search_panels",
+                {"query": "x", "response_mode": "secret_value_42"},
+                raise_on_error=False,
+            )
+            await client.call_tool(
+                "search_panels", {"query": "x", hostile_arg: "y"}, raise_on_error=False
+            )
+    lines = [r.getMessage() for r in caplog.records if r.name.startswith("panelapp_link")]
+    assert "mcp_arg_error tool=search_panels field=response_mode type=literal_error" in lines
+    assert any(
+        line.startswith("mcp_arg_error tool=search_panels field=<unknown> type=") for line in lines
+    )
+    blob = "\n".join(lines)
+    assert "secret_value_42" not in blob
+    assert "delete_everything" not in blob
+
+
+async def test_domain_invalid_input_logs_field_name(caplog: pytest.LogCaptureFixture) -> None:
+    """Issue #126: a service-raised InvalidInputError logs its (server-authored) field."""
+
+    async def call() -> dict[str, Any]:
+        raise InvalidInputError("bad", field="region")
+
+    with caplog.at_level("WARNING", logger="panelapp_link"):
+        await run_mcp_tool("get_panel", call)
+    assert any(
+        "mcp_tool_error tool=get_panel code=invalid_input" in r.getMessage()
+        and r.getMessage().endswith("field=region")
+        for r in caplog.records
+    )
