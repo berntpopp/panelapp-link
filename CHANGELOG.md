@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-11-26
+
+### Fixed
+
+- `get_panelapp_diagnostics` no longer publishes an `outputSchema` (GTS-CORE-SCH-04): its
+  ops envelope carries no `result`/`results` key, so the schema did not describe the
+  returned envelope. It now omits the schema like every other tool; a test asserts that
+  any published `outputSchema` names `success`, `result` or `results`, and `_meta`.
+
 ## [0.11.0] - 2026-11-26
 
 ### Added

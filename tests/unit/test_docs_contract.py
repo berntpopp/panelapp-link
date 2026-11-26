@@ -341,7 +341,8 @@ async def test_headline_is_only_claimed_where_the_output_schema_declares_it() ->
         for name, schema in (await _output_schemas()).items()
         if "headline" in schema.get("properties", {})
     }
-    assert with_headline == {"get_panelapp_diagnostics"}
+    # Diagnostics publishes no outputSchema (GTS-CORE-SCH-04), so none may claim one.
+    assert with_headline <= {"get_panelapp_diagnostics"}
 
     hits = [ln for ln in USAGE_DOC.read_text(encoding="utf-8").splitlines() if "headline" in ln]
     assert hits, "docs/usage.md no longer mentions headline; drop this guard"
@@ -359,3 +360,17 @@ async def test_headline_is_only_claimed_where_the_output_schema_declares_it() ->
 async def test_concrete_region_tools_are_not_offered_both(tool_name: str) -> None:
     schema = (await _tool_schemas())[tool_name]
     assert set(schema["properties"]["region"]["enum"]) == {"uk", "australia"}
+
+
+# --- 10. a published outputSchema describes the envelope (GTS-CORE-SCH-04) --------
+
+
+async def test_published_output_schemas_name_the_envelope_keys() -> None:
+    """A tool MAY omit outputSchema; one it publishes names success, result(s) and _meta."""
+    for name, schema in (await _output_schemas()).items():
+        if not schema:
+            continue
+        props = schema.get("properties", {})
+        assert "success" in props, name
+        assert "_meta" in props, name
+        assert "result" in props or "results" in props, name

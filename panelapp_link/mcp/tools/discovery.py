@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 from panelapp_link.mcp.annotations import READ_ONLY_OPEN_WORLD
 from panelapp_link.mcp.capabilities import build_capabilities
 from panelapp_link.mcp.envelope import McpErrorContext, run_mcp_tool
-from panelapp_link.mcp.schemas import DIAGNOSTICS_SCHEMA
 from panelapp_link.mcp.service_adapters import get_panelapp_service
 
 if TYPE_CHECKING:
@@ -44,7 +43,7 @@ def register_discovery_tools(mcp: FastMCP) -> None:
         name="get_panelapp_diagnostics",
         title="Get PanelApp Diagnostics",
         annotations=READ_ONLY_OPEN_WORLD,
-        output_schema=DIAGNOSTICS_SCHEMA,
+        output_schema=None,  # ops envelope has no result(s) key (GTS-CORE-SCH-04)
         tags={"discovery"},
         description=(
             "Report live backend status: the data mode (live), the upstream "
