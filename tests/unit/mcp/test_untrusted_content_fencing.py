@@ -151,14 +151,14 @@ async def test_get_panel_via_mcp_fences_description_and_types(hostile_mcp) -> No
         )
     assert not res.is_error
     assert res.structured_content["success"] is True
-    panel = res.structured_content["panel"]
+    panel = res.structured_content["result"]
     _assert_fenced(panel["description"], record_id="panel:uk:1207")
     _assert_fenced(panel["types"][0]["description"], record_id="panel:uk:1207#type:hostile-type")
     _assert_no_tool_siblings(panel)
     _assert_no_tool_siblings(panel["types"][0])
     _assert_no_tool_siblings(panel["description"])
     # TextContent JSON mirror carries the identical fenced structure.
-    mirror = json.loads(res.content[0].text)["panel"]
+    mirror = json.loads(res.content[0].text)["result"]
     _assert_fenced(mirror["description"], record_id="panel:uk:1207")
     _assert_fenced(mirror["types"][0]["description"], record_id="panel:uk:1207#type:hostile-type")
     _assert_no_tool_siblings(mirror)
@@ -173,12 +173,12 @@ async def test_get_panel_genes_via_mcp_fences_phenotypes_and_evidence(hostile_mc
         )
     assert not res.is_error
     assert res.structured_content["success"] is True
-    entity = res.structured_content["entities"][0]
+    entity = res.structured_content["results"][0]
     _assert_fenced(entity["phenotypes"][0], record_id="panel:uk:1207#gene:ATF6")
     _assert_fenced(entity["evidence"][0], record_id="panel:uk:1207#gene:ATF6")
     _assert_no_tool_siblings(entity)
     # TextContent JSON mirror carries the identical fenced structure.
-    mirror = json.loads(res.content[0].text)["entities"][0]
+    mirror = json.loads(res.content[0].text)["results"][0]
     _assert_fenced(mirror["phenotypes"][0], record_id="panel:uk:1207#gene:ATF6")
     _assert_fenced(mirror["evidence"][0], record_id="panel:uk:1207#gene:ATF6")
     _assert_no_tool_siblings(mirror)

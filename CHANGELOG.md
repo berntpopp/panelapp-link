@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-26
+
+### Changed
+
+- **Response shape:** the payload key is `results` or `result`, as the Response-Envelope
+  Standard v1 §1 requires. `search_panels` (`panels`), `get_panel_genes` (`entities`) and
+  `get_gene_panels` (`panels`) return that list as `results`; `get_panel` (`panel`) returns
+  it as `result`; `resolve_gene`, `compare_panels` and `get_panels_for_genes` return their
+  payload under `result` (it was spread over the top level). Counts, `query`, `gene` and the
+  other keys beside a list stay at the top level; the two ops tools are unchanged.
+
+### Added
+
+- Response-Envelope Standard v1.2 provenance in `_meta` of every successful data result
+  (#130): `source` (`panelapp`), `data_version` (`live`: PanelApp publishes no release of
+  the whole database) and `retrieved_at` (RFC 3339 UTC; the cache keeps the fetch time of
+  each entry, so a cache hit reports it unchanged, and a call that read several entries
+  reports the oldest).
+- Every data tool's result is validated against the published envelope schema v1.2.0 in the
+  test suite; the vendored behaviour gate checks the provenance rule.
+
 ## [0.9.1] - 2026-11-19
 
 ### Fixed

@@ -124,6 +124,13 @@ guessing — present on **error** envelopes too (e.g. a `not_found` from
 `get_gene_panels` hands back `resolve_gene` with the same query). Every `_meta`
 also carries a `request_id` and server-side `elapsed_ms` for tracing.
 
+Every data tool returns its payload under `results` (`search_panels`, `get_panel_genes`,
+`get_gene_panels`) or `result` (`get_panel`, `resolve_gene`, `compare_panels`,
+`get_panels_for_genes`), with counts and echoes beside it, and names its provenance in
+`_meta`: `source` (`panelapp`), `data_version` (`live`: PanelApp publishes no release of the
+whole database; each panel carries its own `version`) and `retrieved_at` (UTC time of the
+upstream fetch; a cache hit keeps the time its entry was fetched).
+
 To save tokens, `compact`/`standard` replace the full citation with a cacheable
 `_meta.citation_ref = "panelapp://citation"` plus a one-line
 `_meta.citation_short` attribution stub; `full` keeps the verbatim citation.

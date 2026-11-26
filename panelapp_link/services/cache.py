@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from panelapp_link.observability import telemetry, tracing
@@ -31,6 +32,8 @@ class TTLCache:
         self._maxsize = maxsize
         self._ttl = ttl
         self._store: dict[str, tuple[float, Any]] = {}
+        # Wall-clock time each entry was fetched upstream (`_meta.retrieved_at`).
+        self._fetched_at: dict[str, datetime] = {}
 
     def get(self, key: str) -> Any | None:
         if self._maxsize <= 0:
@@ -41,15 +44,23 @@ class TTLCache:
         expires_at, value = item
         if expires_at < time.monotonic():
             self._store.pop(key, None)
+            self._fetched_at.pop(key, None)
             return None
         return value
+
+    def fetched_at(self, key: str) -> datetime | None:
+        """When ``key`` was put, i.e. fetched upstream; ``None`` when it is not cached."""
+        return self._fetched_at.get(key)
 
     def put(self, key: str, value: Any) -> None:
         if self._maxsize <= 0:
             return
         if len(self._store) >= self._maxsize and key not in self._store:
-            self._store.pop(next(iter(self._store)), None)
+            evicted = next(iter(self._store))
+            self._store.pop(evicted, None)
+            self._fetched_at.pop(evicted, None)
         self._store[key] = (time.monotonic() + self._ttl, value)
+        self._fetched_at[key] = datetime.now(UTC)
 
     def stats(self) -> dict[str, int]:
         return {"entries": len(self._store), "maxsize": self._maxsize, "ttl": self._ttl}
@@ -84,6 +95,7 @@ class RequestCache:
         cached = self._cache.get(key)
         if cached is not None:
             telemetry.record_cache_hit()
+            telemetry.record_fetched(self._cache.fetched_at(key))
             get_metrics().record_cache("hit")
             return cached
 
@@ -91,7 +103,9 @@ class RequestCache:
         if inflight is not None:
             telemetry.record_coalesced()
             get_metrics().record_cache("coalesced")
-            return await inflight
+            data = await inflight
+            telemetry.record_fetched(self._cache.fetched_at(key))
+            return data
 
         task: asyncio.Task[Any] = asyncio.ensure_future(
             self._fetch_and_cache(key, region, endpoint, fetch)
@@ -118,6 +132,7 @@ class RequestCache:
         telemetry.record_upstream(region, endpoint, elapsed_ms)
         get_metrics().record_upstream(region, elapsed_ms)
         self._cache.put(key, data)
+        telemetry.record_fetched(self._cache.fetched_at(key))
         telemetry.record_cache_miss()
         get_metrics().record_cache("miss")
         return data

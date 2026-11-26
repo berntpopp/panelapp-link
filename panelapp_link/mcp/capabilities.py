@@ -154,6 +154,8 @@ def _static_surface() -> dict[str, Any]:
                 "request_id (12-hex correlation id; also an OpenTelemetry span attribute)",
                 "elapsed_ms (server-side wall-clock)",
                 "cache (hit|miss|coalesced|partial)",
+                "source + data_version + retrieved_at (data tools: provenance; retrieved_at is "
+                "the upstream fetch time, kept on a cache hit)",
                 "upstream_ms + upstream{region:{calls,ms}} (per-region upstream timing)",
             ],
             "tracing": (

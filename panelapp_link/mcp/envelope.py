@@ -399,6 +399,30 @@ def rate_limited_envelope(tool_name: str) -> dict[str, Any]:
     return envelope
 
 
+# Ops/meta tools return no upstream data: no payload key, no provenance (v1.2 carve-out).
+_OPS_TOOLS = frozenset({"get_server_capabilities", "get_panelapp_diagnostics"})
+# Response-Envelope v1 §1: the payload key is `results` (array) or `result` (object). The
+# service's own key per tool; a data tool not listed is nested whole under `result`.
+_PAYLOAD_KEY = {
+    "search_panels": "panels",
+    "get_panel": "panel",
+    "get_panel_genes": "entities",
+    "get_gene_panels": "panels",
+}
+
+
+def _frame_payload(tool_name: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Return ``result`` with its payload under ``results``/``result`` (a new dict)."""
+    if "results" in result or "result" in result:
+        return result
+    key = _PAYLOAD_KEY.get(tool_name)
+    if key in result:
+        name = "results" if isinstance(result[key], list) else "result"
+        return {(name if k == key else k): v for k, v in result.items()}
+    frame = {k: v for k, v in result.items() if k in ("success", "_meta")}
+    return {"result": {k: v for k, v in result.items() if k not in frame}, **frame}
+
+
 async def run_mcp_tool(
     tool_name: str,
     call: Callable[[], Awaitable[dict[str, Any]]],
@@ -438,6 +462,14 @@ async def run_mcp_tool(
                 # Minimal mode is for sweep/agent-loop workloads: shed per-call
                 # token tax -- one next step, and drop upstream timing + the
                 # redundant short citation (the citation_ref stub still rides).
+                if tool_name not in _OPS_TOOLS:
+                    result = _frame_payload(tool_name, result)
+                    # Response-Envelope v1.2 provenance, once for every data tool. PanelApp
+                    # publishes no release of the whole database (panels carry their own
+                    # `version`), so the data is `live` and dated by `retrieved_at`.
+                    meta["source"] = "panelapp"
+                    meta["data_version"] = "live"
+                    meta["retrieved_at"] = telemetry.retrieved_at(scope)
                 if response_mode == "minimal":
                     for heavy in ("upstream", "upstream_ms", "citation_short"):
                         meta.pop(heavy, None)

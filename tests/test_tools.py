@@ -54,8 +54,8 @@ async def test_search_panels_success(mcp_client: Client) -> None:
     result = await mcp_client.call_tool("search_panels", {"query": "", "region": "both"})
     data = result.structured_content
     assert data["success"] is True
-    assert {"query", "count", "total", "panels"} <= set(data)
-    assert isinstance(data["panels"], list)
+    assert {"query", "count", "total", "results"} <= set(data)
+    assert isinstance(data["results"], list)
     assert "next_commands" in data["_meta"]
     assert data["_meta"]["data_freshness"]["status"] == "disabled"
 
@@ -73,8 +73,8 @@ async def test_get_panel_success(mcp_client: Client) -> None:
     result = await mcp_client.call_tool("get_panel", {"panel_id": 285, "region": "uk"})
     data = result.structured_content
     assert data["success"] is True
-    assert data["panel"]["panel_id"] == 285
-    assert data["panel"]["region"] == "uk"
+    assert data["result"]["panel_id"] == 285
+    assert data["result"]["region"] == "uk"
     assert data["_meta"]["next_commands"][0]["tool"] == "get_panel_genes"
     assert data["_meta"]["data_freshness"]["status"] == "disabled"
 
@@ -84,9 +84,9 @@ async def test_get_panel_genes_success(mcp_client: Client) -> None:
     data = result.structured_content
     assert data["success"] is True
     assert data["entity_type"] == "gene"
-    assert {"panel_id", "region", "count", "total", "entities"} <= set(data)
+    assert {"panel_id", "region", "count", "total", "results"} <= set(data)
     assert data["total"] >= 1
-    assert all(e.get("entity_type") == "gene" for e in data["entities"])
+    assert all(e.get("entity_type") == "gene" for e in data["results"])
 
 
 async def test_get_panel_genes_entity_type_filter(mcp_client: Client) -> None:
@@ -113,8 +113,8 @@ async def test_get_panel_genes_entity_type_filter(mcp_client: Client) -> None:
     assert genes["success"] and regions["success"] and strs["success"] and allents["success"]
     assert regions["total"] >= 1 and strs["total"] >= 1
     assert allents["total"] == genes["total"] + regions["total"] + strs["total"]
-    assert all(e["entity_type"] == "region" for e in regions["entities"])
-    assert all(e["entity_type"] == "str" for e in strs["entities"])
+    assert all(e["entity_type"] == "region" for e in regions["results"])
+    assert all(e["entity_type"] == "str" for e in strs["results"])
 
 
 async def test_search_panels_pagination_breadcrumb_carries_query(mcp_client: Client) -> None:
@@ -165,15 +165,15 @@ async def test_get_panel_genes_min_confidence_filter(mcp_client: Client) -> None
     ).structured_content
     assert green["success"] is True
     assert green["total"] <= unfiltered["total"]
-    assert all(e["confidence_label"] == "green" for e in green["entities"])
+    assert all(e["confidence_label"] == "green" for e in green["results"])
 
 
 async def test_resolve_gene_success(mcp_client: Client) -> None:
     result = await mcp_client.call_tool("resolve_gene", {"query": "AAAS"})
     data = result.structured_content
     assert data["success"] is True
-    assert data["gene"]["gene_symbol"] == "AAAS"
-    assert {"query", "gene", "matches"} <= set(data)
+    assert data["result"]["gene"]["gene_symbol"] == "AAAS"
+    assert {"query", "gene", "matches"} <= set(data["result"])
     # The breadcrumb must drive get_gene_panels by gene_symbol (the query key),
     # not hgnc_id -- following it verbatim must succeed.
     breadcrumb = data["_meta"]["next_commands"][0]
@@ -196,7 +196,7 @@ async def test_get_gene_panels_success(mcp_client: Client) -> None:
     data = result.structured_content
     assert data["success"] is True
     assert data["gene"]["gene_symbol"] == "AAAS"
-    assert {"gene", "count", "panels"} <= set(data)
+    assert {"gene", "count", "results"} <= set(data)
     assert data["count"] >= 1
 
 

@@ -37,6 +37,6 @@ async def test_get_panels_for_genes_honours_configured_cap(mcp_client, monkeypat
         )
     body = res.structured_content
     assert body["success"] is True
-    assert body["truncated"]["requested"] == 2
-    assert body["truncated"]["processed"] == 1
-    assert len(body["genes"]) == 1
+    assert body["result"]["truncated"]["requested"] == 2
+    assert body["result"]["truncated"]["processed"] == 1
+    assert len(body["result"]["genes"]) == 1
