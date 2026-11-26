@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from panelapp_link.mcp.untrusted_content import FORBIDDEN_CODEPOINTS
-from panelapp_link.services._live_helpers import is_hgnc_curie
+from panelapp_link.services._live_helpers import gene_id_converter, is_hgnc_curie
 
 _MAX_NEXT_COMMANDS = 5
 
@@ -100,10 +100,13 @@ def after_compare_panels(panel_refs: list[dict[str, Any]]) -> list[dict[str, Any
     return nexts[:_MAX_NEXT_COMMANDS]
 
 
-def after_panels_for_genes(genes: dict[str, Any]) -> list[dict[str, Any]]:
-    """After a batch lookup: list each found gene's full panel footprint."""
+def after_panels_for_genes(
+    genes: dict[str, Any], unsupported: list[dict[str, str]] | None = None
+) -> list[dict[str, Any]]:
+    """After a batch lookup: convert the first unsupported id, then each gene's footprint."""
+    converters = [gene_id_converter(u["input"]) for u in (unsupported or [])[:1]]
     nexts = [cmd("get_gene_panels", gene_symbol=sym) for sym in genes]
-    return nexts[:_MAX_NEXT_COMMANDS]
+    return [c for c in converters if c] + nexts[: _MAX_NEXT_COMMANDS - len(converters)]
 
 
 def recovery_commands(

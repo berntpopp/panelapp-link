@@ -100,3 +100,72 @@ async def test_get_panels_for_genes_mixed(mcp_client) -> None:
     assert body["success"] is True
     assert "AAAS" in body["result"]["genes"]
     assert body["result"]["not_found"] == ["MADEUPGENE"]
+
+
+@pytest.mark.parametrize(
+    ("tool", "args", "field", "step"),
+    [
+        (
+            "resolve_gene",
+            {"query": "ENSG00000144285"},
+            "query",
+            {"tool": "hgnc_resolve_symbol", "arguments": {"query": "ENSG00000144285"}},
+        ),
+        (
+            "get_gene_panels",
+            {"gene_symbol": "HGNC:10585"},
+            "gene_symbol",
+            {"tool": "hgnc_resolve_symbol", "arguments": {"query": "HGNC:10585"}},
+        ),
+        (
+            "get_gene_panels",
+            {"gene_symbol": "NCBIGene:6323"},
+            "gene_symbol",
+            {
+                "tool": "hgnc_resolve_gene_by_xref",
+                "arguments": {"source": "entrez_id", "value": "6323"},
+            },
+        ),
+        (
+            "get_gene_panels",
+            {"gene_symbol": "AAAS", "hgnc_id": "AAAS"},
+            "hgnc_id",
+            {"tool": "hgnc_resolve_symbol", "arguments": {"query": "AAAS"}},
+        ),
+    ],
+)
+async def test_gene_id_in_the_wrong_form_is_invalid_input_with_a_converter(
+    mcp_client, tool, args, field, step
+) -> None:
+    async with mcp_client as client:
+        body = (await client.call_tool(tool, args, raise_on_error=False)).structured_content
+    assert body["error_code"] == "invalid_input"
+    assert body["field"] == field
+    assert body["allowed_values"]
+    assert body["_meta"]["next_commands"] == [step]
+
+
+async def test_batch_lists_a_gene_id_as_unsupported_and_still_answers(mcp_client) -> None:
+    async with mcp_client as client:
+        res = await client.call_tool(
+            "get_panels_for_genes",
+            {"gene_symbols": ["AAAS", "ENSG00000144285"]},
+            raise_on_error=False,
+        )
+    body = res.structured_content
+    assert body["success"] is True and "AAAS" in body["result"]["genes"]
+    assert body["unsupported"] == [{"input": "ENSG00000144285", "reason": "unsupported_identifier"}]
+    assert body["result"]["not_found"] == []
+    assert body["_meta"]["next_commands"][0]["tool"] == "hgnc_resolve_symbol"
+
+
+async def test_paged_tool_reports_pagination_meta(mcp_client) -> None:
+    async with mcp_client as client:
+        res = await client.call_tool(
+            "get_panel_genes", {"panel_id": 1207, "region": "uk", "limit": 1}, raise_on_error=False
+        )
+    body = res.structured_content
+    pagination = body["_meta"]["pagination"]
+    assert pagination["total_count"] == body["total"]
+    assert pagination["has_more"] is body["has_more"]
+    assert pagination["next_cursor"] == (body.get("truncated") or {}).get("next_cursor")

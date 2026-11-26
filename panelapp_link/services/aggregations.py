@@ -13,6 +13,7 @@ from typing import Any, Protocol
 
 from panelapp_link.exceptions import InvalidInputError, NotFoundError
 from panelapp_link.models.enums import CONCRETE_REGIONS
+from panelapp_link.services._live_helpers import gene_id_converter
 
 #: Public so the MCP tool can advertise the same bounds it is validated against.
 MIN_PANELS = 2
@@ -193,9 +194,12 @@ async def panels_for_genes(
     Unknown symbols collect into ``not_found``; operational errors (download /
     rate-limit) propagate and fail the whole call (retryable envelope upstream).
     """
-    cleaned = [s.strip().upper() for s in gene_symbols if s and s.strip()]
+    stripped = list(dict.fromkeys(s.strip() for s in gene_symbols if s and s.strip()))
+    # A gene id is never a symbol lookup: listed, converted via next_commands, batch goes on.
+    unsupported = [s for s in stripped if gene_id_converter(s)]
+    cleaned = [s.upper() for s in stripped if s not in unsupported]
     deduped = list(dict.fromkeys(cleaned))  # order-preserving unique
-    if not deduped:
+    if not stripped:
         raise InvalidInputError("Provide at least one gene_symbol.", field="gene_symbols")
     processed = deduped[:cap]
 
@@ -230,6 +234,8 @@ async def panels_for_genes(
         genes[symbol] = entry
 
     out: dict[str, Any] = {"genes": genes, "not_found": not_found}
+    if unsupported:
+        out["unsupported"] = [{"input": s, "reason": "unsupported_identifier"} for s in unsupported]
     if len(deduped) > cap:
         out["truncated"] = {
             "requested": len(deduped),

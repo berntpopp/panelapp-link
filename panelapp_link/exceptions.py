@@ -8,6 +8,8 @@ the envelope module alongside the classifier that consumes it.
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class PanelAppError(Exception):
     """Base exception for all PanelApp-Link errors."""
@@ -26,6 +28,26 @@ class InvalidInputError(PanelAppError):
     def __init__(self, message: str, field: str | None = None) -> None:
         super().__init__(message)
         self.field = field
+
+
+class UnsupportedGeneIdError(InvalidInputError):
+    """Raised for a gene identifier in a form the parameter does not take.
+
+    ``allowed`` names the accepted forms and ``converter`` is the ready-to-call hgnc-link
+    step that turns the value into one, when its form is recognised.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        field: str,
+        *,
+        allowed: tuple[str, ...],
+        converter: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message, field=field)
+        self.allowed = allowed
+        self.converter = converter
 
 
 class NotFoundError(PanelAppError):

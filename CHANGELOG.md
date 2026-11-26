@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-26
+
+### Added
+
+- Gene identifier forms: an HGNC, Ensembl or NCBI Gene id in a symbol position
+  (`get_gene_panels.gene_symbol`, `resolve_gene.query`), and a value of `hgnc_id` that is not
+  an HGNC CURIE, are rejected with `invalid_input` carrying `field`, `allowed_values` and the
+  hgnc-link call that converts the value in `_meta.next_commands`. An Ensembl or NCBI Gene
+  id was `not_found` before; the HGNC rejection named no converter.
+- `get_panels_for_genes` lists a gene id under `unsupported` and still answers the other
+  genes; before, an HGNC id failed the whole batch and other ids were looked up as symbols.
+- `_meta.pagination` (`total_count`, `has_more`, `next_cursor`) on `search_panels` and
+  `get_panel_genes`; the top-level paging fields are unchanged.
+
 ## [0.10.0] - 2026-11-26
 
 ### Changed
