@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -30,6 +31,7 @@ class RequestTelemetry:
     cache_misses: int = 0
     coalesced: int = 0
     upstream: list[dict[str, Any]] = field(default_factory=list)
+    fetched: list[datetime] = field(default_factory=list)
 
 
 _current: ContextVar[RequestTelemetry | None] = ContextVar(
@@ -91,6 +93,23 @@ def record_upstream(region: str, endpoint: str, ms: float) -> None:
     scope = _current.get()
     if scope is not None:
         scope.upstream.append({"region": region, "endpoint": endpoint, "ms": round(ms, 2)})
+
+
+def record_fetched(when: datetime | None) -> None:
+    """Record the upstream fetch time of data this call was served from."""
+    scope = _current.get()
+    if scope is not None and when is not None:
+        scope.fetched.append(when)
+
+
+def retrieved_at(scope: RequestTelemetry) -> str:
+    """``_meta.retrieved_at`` (RFC 3339 UTC, ``Z``): the oldest upstream fetch of the call.
+
+    A cache hit reports the fetch that filled its entry (Response-Envelope v1.2); a call
+    that recorded no fetch (cache disabled) is dated now.
+    """
+    oldest = min(scope.fetched) if scope.fetched else datetime.now(UTC)
+    return oldest.isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def _cache_label(scope: RequestTelemetry) -> str | None:

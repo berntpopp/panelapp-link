@@ -260,8 +260,8 @@ async def test_resolve_gene_returns_exactly_one_match(live_service: Any) -> None
     """`matches[]` is always the single rolled-up gene -- never a candidate list."""
     body = await _call("resolve_gene", {"query": "AAAS"}, live_service)
     assert body["success"] is True
-    assert len(body["matches"]) == 1
-    assert body["matches"][0] == body["gene"]
+    assert len(body["result"]["matches"]) == 1
+    assert body["result"]["matches"][0] == body["result"]["gene"]
 
 
 # --- 5. hgnc_id is a filter, never a standalone query ----------------------------

@@ -28,8 +28,8 @@ async def test_compare_panels_self_overlap(mcp_client) -> None:
         )
     body = res.structured_content
     assert body["success"] is True
-    assert body["only_in"]["1207@uk"] == []
-    assert body["summary"]["n_shared"] == body["summary"]["n_union"]
+    assert body["result"]["only_in"]["1207@uk"] == []
+    assert body["result"]["summary"]["n_shared"] == body["result"]["summary"]["n_union"]
 
 
 async def test_compare_panels_region_both_rejected(mcp_client) -> None:
@@ -69,7 +69,7 @@ async def test_compare_panels_accepts_a_ref_with_extra_keys(mcp_client) -> None:
         )
     body = res.structured_content
     assert body["success"] is True
-    assert body["only_in"]["1207@uk"] == []
+    assert body["result"]["only_in"]["1207@uk"] == []
 
 
 async def test_compare_panels_coerces_a_string_panel_id(mcp_client) -> None:
@@ -98,5 +98,5 @@ async def test_get_panels_for_genes_mixed(mcp_client) -> None:
         )
     body = res.structured_content
     assert body["success"] is True
-    assert "AAAS" in body["genes"]
-    assert body["not_found"] == ["MADEUPGENE"]
+    assert "AAAS" in body["result"]["genes"]
+    assert body["result"]["not_found"] == ["MADEUPGENE"]

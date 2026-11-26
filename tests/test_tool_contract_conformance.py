@@ -28,7 +28,7 @@ async def test_get_panel_count_fields_mode_invariant(mcp_client, mode: str) -> N
             {"panel_id": 1207, "region": "uk", "response_mode": mode},
             raise_on_error=False,
         )
-    panel = res.structured_content["panel"]
+    panel = res.structured_content["result"]
     assert {"n_genes", "n_regions", "n_strs"} <= panel.keys()
     assert not any(k.startswith("number_of_") for k in panel)
 
@@ -41,6 +41,6 @@ async def test_search_panels_count_fields_mode_invariant(mcp_client, mode: str) 
             {"query": "", "region": "uk", "limit": 3, "response_mode": mode},
             raise_on_error=False,
         )
-    for panel in res.structured_content["panels"]:
+    for panel in res.structured_content["results"]:
         assert {"n_genes", "n_regions", "n_strs"} <= panel.keys()
         assert not any(k.startswith("number_of_") for k in panel)

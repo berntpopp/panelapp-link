@@ -126,3 +126,21 @@ async def test_upstream_timing_recorded() -> None:
     assert scope.upstream[0]["endpoint"] == "genes"
     assert scope.upstream[0]["ms"] >= 0
     assert "australia" in get_metrics().snapshot()["upstream_duration_ms"]
+
+
+async def test_cache_hit_keeps_the_original_fetch_time() -> None:
+    """Response-Envelope v1.2: retrieved_at is the fetch that filled the entry."""
+    from panelapp_link.observability import telemetry
+
+    cache = RequestCache(maxsize=16, ttl=60)
+
+    async def fetch() -> dict[str, int]:
+        return {"x": 1}
+
+    with telemetry.request_scope("r1") as first:
+        await cache.get_or_fetch("k", "uk", "/panels/", fetch)
+    with telemetry.request_scope("r2") as second:
+        await cache.get_or_fetch("k", "uk", "/panels/", fetch)
+    assert first.fetched == second.fetched and len(first.fetched) == 1
+    assert telemetry.retrieved_at(second) == telemetry.retrieved_at(first)
+    assert telemetry.retrieved_at(first).endswith("Z")

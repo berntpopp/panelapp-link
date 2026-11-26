@@ -34,7 +34,7 @@ class TestHappyPath:
 
         out = await run_mcp_tool("t", body)
         assert out["success"] is True
-        assert out["value"] == 42
+        assert out["result"] == {"value": 42}
         assert "_meta" in out
         assert out["_meta"]["recommended_citation"]
         assert out["_meta"]["unsafe_for_clinical_use"] is True
