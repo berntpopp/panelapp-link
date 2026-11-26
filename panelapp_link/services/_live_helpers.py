@@ -13,7 +13,7 @@ import re
 from typing import Any
 
 from panelapp_link.constants import CONFIDENCE_RANK, confidence_label
-from panelapp_link.exceptions import InvalidInputError
+from panelapp_link.exceptions import InvalidInputError, UnsupportedGeneIdError
 
 # An HGNC CURIE (``HGNC:1100``) in the gene-lookup position. PanelApp is keyed by
 # gene SYMBOL only (``/genes/?entity_name=``); there is no server-side HGNC lookup
@@ -21,6 +21,10 @@ from panelapp_link.exceptions import InvalidInputError
 # CURIE therefore either misses (UK exact match) or LOOSELY matches one region (AU),
 # so as the lookup key it half-answers with a silently dropped region (issue #25 D3).
 _HGNC_CURIE_RE = re.compile(r"^HGNC:\d+$", re.IGNORECASE)
+_ENSEMBL_GENE_RE = re.compile(r"ENSG\d{11}(\.\d+)?", re.IGNORECASE)
+_NCBI_GENE_RE = re.compile(r"(?:NCBI_?Gene|Entrez(?:Gene)?|GeneID):(\d+)", re.IGNORECASE)
+# A value safe to echo into a converter call: the shape of a gene symbol, no prose.
+_SYMBOL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,39}")
 
 
 def is_hgnc_curie(value: str) -> bool:
@@ -28,21 +32,48 @@ def is_hgnc_curie(value: str) -> bool:
     return bool(_HGNC_CURIE_RE.match(value))
 
 
-def reject_hgnc_curie(symbol: str, *, field: str) -> None:
-    """Reject an HGNC CURIE used as the gene-lookup key (issue #25 D3).
+def gene_id_converter(value: str) -> dict[str, Any] | None:
+    """The hgnc-link call that converts a gene id to its symbol; None if ``value`` is not one."""
+    text = value.strip()
+    if is_hgnc_curie(text) or _ENSEMBL_GENE_RE.fullmatch(text):
+        return {"tool": "hgnc_resolve_symbol", "arguments": {"query": text}}
+    if match := _NCBI_GENE_RE.fullmatch(text):
+        arguments = {"source": "entrez_id", "value": match.group(1)}
+        return {"tool": "hgnc_resolve_gene_by_xref", "arguments": arguments}
+    return None
 
-    PanelApp resolves genes by SYMBOL; a CURIE in the lookup position is not a key
+
+def reject_gene_id(symbol: str, *, field: str) -> None:
+    """Reject an HGNC, Ensembl or NCBI Gene id used as the gene-lookup key (issue #25 D3).
+
+    PanelApp resolves genes by SYMBOL; an identifier in the lookup position is not a key
     here. ``field`` MUST name the caller's actual lookup parameter (``query`` for
     resolve_gene, ``gene_symbol`` for get_gene_panels) so ``field_errors`` never
     reports a parameter the calling tool does not expose. ``get_gene_panels``'s
     ``hgnc_id`` is a separate optional result FILTER and is unaffected.
     """
-    if is_hgnc_curie(symbol):
-        raise InvalidInputError(
-            "An HGNC id is not a gene-lookup key here; PanelApp is queried by an "
+    converter = gene_id_converter(symbol)
+    if converter is not None:
+        raise UnsupportedGeneIdError(
+            "A gene identifier is not a gene-lookup key here; PanelApp is queried by an "
             "approved gene symbol (e.g. SCN1A).",
-            field=field,
+            field,
+            allowed=("<symbol> e.g. SCN1A",),
+            converter=converter,
         )
+
+
+def bad_hgnc_filter(value: str) -> UnsupportedGeneIdError:
+    """The error for an ``hgnc_id`` filter that is not an HGNC CURIE, with its converter."""
+    converter = gene_id_converter(value)
+    if converter is None and _SYMBOL_RE.fullmatch(value):  # a symbol: HGNC gives its id
+        converter = {"tool": "hgnc_resolve_symbol", "arguments": {"query": value}}
+    return UnsupportedGeneIdError(
+        "hgnc_id must be an HGNC CURIE like HGNC:1100.",
+        "hgnc_id",
+        allowed=("HGNC:<id> e.g. HGNC:1100",),
+        converter=converter,
+    )
 
 
 def validate_panel_id(panel_id: int) -> int:

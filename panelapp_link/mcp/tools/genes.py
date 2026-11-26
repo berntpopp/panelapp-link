@@ -35,7 +35,8 @@ _MIN_CONFIDENCE = Annotated[
 _GENE_SYMBOL = Annotated[
     str,
     Field(
-        description="Approved gene symbol (e.g. PKD1). Required: PanelApp queries by symbol.",
+        description="Approved gene symbol (e.g. PKD1). Required: PanelApp queries by symbol; an "
+        "HGNC, Ensembl or NCBI Gene id is rejected with the call that converts it.",
         examples=["SCN1A"],
     ),
 ]
@@ -56,7 +57,8 @@ _RESOLVE_QUERY = Annotated[
     Field(
         description=(
             "Approved gene symbol or free text to resolve to one rolled-up gene "
-            "(e.g. SCN1A). An HGNC id is not a lookup key here."
+            "(e.g. SCN1A). An HGNC, Ensembl or NCBI Gene id is not a lookup key here: it is "
+            "rejected with the call that converts it."
         ),
         examples=["SCN1A"],
     ),

@@ -41,7 +41,8 @@ _PANELS = Annotated[
 _SYMBOLS = Annotated[
     list[str],
     Field(
-        description="Approved gene symbols (e.g. PKD1); capped at 20 per call.",
+        description="Approved gene symbols (e.g. PKD1); capped at 20 per call. An HGNC, "
+        "Ensembl or NCBI Gene id is listed under `unsupported` with the call that converts it.",
         examples=[["SCN1A", "SCN2A"]],
     ),
 ]
@@ -118,7 +119,11 @@ def register_aggregation_tools(mcp: FastMCP) -> None:
                 response_mode=response_mode,
                 cap=settings.data.gene_batch_cap,
             )
-            payload["_meta"] = {"next_commands": after_panels_for_genes(payload.get("genes", {}))}
+            payload["_meta"] = {
+                "next_commands": after_panels_for_genes(
+                    payload.get("genes", {}), payload.get("unsupported")
+                )
+            }
             return payload
 
         return await run_mcp_tool(

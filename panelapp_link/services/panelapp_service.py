@@ -415,13 +415,11 @@ class PanelAppService:
                 "hgnc_id alone cannot drive the query.",
                 field="gene_symbol",
             )
-        helpers.reject_hgnc_curie(symbol, field="gene_symbol")
+        helpers.reject_gene_id(symbol, field="gene_symbol")
         hid = (hgnc_id or "").strip() or None
         if hid is not None:
             if not helpers.is_hgnc_curie(hid):
-                raise InvalidInputError(
-                    "hgnc_id must be an HGNC CURIE like HGNC:1100.", field="hgnc_id"
-                )
+                raise helpers.bad_hgnc_filter(hid)
             # PanelApp stores an uppercase HGNC prefix.
             hid = hid.upper()
 
@@ -487,7 +485,7 @@ class PanelAppService:
                 "Provide a gene_symbol or a non-empty query (PanelApp resolves by gene symbol).",
                 field=lookup_field,
             )
-        helpers.reject_hgnc_curie(symbol, field=lookup_field)
+        helpers.reject_gene_id(symbol, field=lookup_field)
         regions = self._normalize_region(region)
         results = await self._gather_gene_results(regions, symbol)
         if not results:

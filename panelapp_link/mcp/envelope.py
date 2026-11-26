@@ -31,6 +31,7 @@ from panelapp_link.exceptions import (
     NotFoundError,
     RateLimitError,
     ResponseTooLargeError,
+    UnsupportedGeneIdError,
 )
 from panelapp_link.mcp.next_commands import recovery_commands
 from panelapp_link.mcp.untrusted_content import UntrustedTextLimitError, sanitize_message
@@ -329,6 +330,11 @@ def _error_envelope(
     field_errors = _field_errors(exc)
     if field_errors is not None:
         envelope["field_errors"] = field_errors
+    if isinstance(exc, UnsupportedGeneIdError):
+        envelope["field"] = field_name
+        envelope["allowed_values"] = list(exc.allowed)
+        if exc.converter:
+            meta["next_commands"] = [exc.converter]
     # Final code-point backstop over every string leaf of the whole error envelope
     # (message, field_errors, and any next_commands recovery argument).
     return cast("dict[str, Any]", _sanitize_tree(envelope))
@@ -419,7 +425,7 @@ def _frame_payload(tool_name: str, result: dict[str, Any]) -> dict[str, Any]:
     if key in result:
         name = "results" if isinstance(result[key], list) else "result"
         return {(name if k == key else k): v for k, v in result.items()}
-    frame = {k: v for k, v in result.items() if k in ("success", "_meta")}
+    frame = {k: v for k, v in result.items() if k in ("success", "_meta", "unsupported")}
     return {"result": {k: v for k, v in result.items() if k not in frame}, **frame}
 
 
@@ -462,6 +468,12 @@ async def run_mcp_tool(
                 # Minimal mode is for sweep/agent-loop workloads: shed per-call
                 # token tax -- one next step, and drop upstream timing + the
                 # redundant short citation (the citation_ref stub still rides).
+                if "has_more" in result:
+                    meta["pagination"] = {
+                        "total_count": result.get("total"),
+                        "has_more": result["has_more"],
+                        "next_cursor": (result.get("truncated") or {}).get("next_cursor"),
+                    }
                 if tool_name not in _OPS_TOOLS:
                     result = _frame_payload(tool_name, result)
                     # Response-Envelope v1.2 provenance, once for every data tool. PanelApp
